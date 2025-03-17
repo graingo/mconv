@@ -3,7 +3,7 @@ package complex
 import (
 	"encoding/json"
 
-	"github.com/mingzaily/mconv/internal"
+	"github.com/graingo/mconv/internal"
 )
 
 // ToJSONE converts any type to JSON string with error.

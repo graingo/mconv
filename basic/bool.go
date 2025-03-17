@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/mingzaily/mconv/internal"
+	"github.com/graingo/mconv/internal"
 )
 
 // ToBool converts any type to bool.

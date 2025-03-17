@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mingzaily/mconv"
+	"github.com/graingo/mconv"
 )
 
 type TestPerson struct {

@@ -3,8 +3,8 @@ package complex
 import (
 	"reflect"
 
-	"github.com/mingzaily/mconv/basic"
-	"github.com/mingzaily/mconv/internal"
+	"github.com/graingo/mconv/basic"
+	"github.com/graingo/mconv/internal"
 )
 
 // ToSliceT converts any type to []T.

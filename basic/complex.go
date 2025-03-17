@@ -3,7 +3,7 @@ package basic
 import (
 	"strconv"
 
-	"github.com/mingzaily/mconv/internal"
+	"github.com/graingo/mconv/internal"
 )
 
 // ToComplex128E converts any type to complex128 with error.

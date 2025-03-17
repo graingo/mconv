@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mingzaily/mconv/internal"
+	"github.com/graingo/mconv/internal"
 )
 
 // ToTimeE converts any type to time.Time with error.

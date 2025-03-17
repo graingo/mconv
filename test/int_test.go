@@ -3,7 +3,7 @@ package mconv_test
 import (
 	"testing"
 
-	"github.com/mingzaily/mconv"
+	"github.com/graingo/mconv"
 )
 
 func TestToInt(t *testing.T) {

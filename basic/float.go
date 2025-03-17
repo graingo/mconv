@@ -3,7 +3,7 @@ package basic
 import (
 	"strconv"
 
-	"github.com/mingzaily/mconv/internal"
+	"github.com/graingo/mconv/internal"
 )
 
 // ToFloat64 converts any type to float64.

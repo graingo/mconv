@@ -4,7 +4,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/mingzaily/mconv"
+	"github.com/graingo/mconv"
 )
 
 func TestToTime(t *testing.T) {

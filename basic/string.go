@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/mingzaily/mconv/internal"
+	"github.com/graingo/mconv/internal"
 )
 
 // ToStringE converts any type to string with error

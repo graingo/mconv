@@ -4,9 +4,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/mingzaily/mconv"
-	"github.com/mingzaily/mconv/complex"
-	"github.com/mingzaily/mconv/internal"
+	"github.com/graingo/mconv"
+	"github.com/graingo/mconv/complex"
+	"github.com/graingo/mconv/internal"
 )
 
 // Complex struct for testing reflection performance

@@ -1,9 +1,9 @@
 package mconv
 
 import (
-	"github.com/mingzaily/mconv/basic"
-	"github.com/mingzaily/mconv/complex"
-	"github.com/mingzaily/mconv/internal"
+	"github.com/graingo/mconv/basic"
+	"github.com/graingo/mconv/complex"
+	"github.com/graingo/mconv/internal"
 )
 
 var (
