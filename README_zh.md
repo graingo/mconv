@@ -7,7 +7,7 @@
 ## 安装
 
 ```bash
-go get github.com/mingzaily/mconv
+go get github.com/graingo/mconv
 ```
 
 ## 特性
@@ -47,7 +47,7 @@ personMap := mconv.ToMapFromJSON(`{"name":"Jane"}`) // map[string]interface{}{"n
 ## 泛型支持（Go 1.18+）
 
 ```go
-import "github.com/mingzaily/mconv/complex"
+import "github.com/graingo/mconv/complex"
 
 // 使用泛型进行切片转换
 strSlice := complex.ToSliceT[string]([]int{1, 2, 3}) // []string{"1", "2", "3"}

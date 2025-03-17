@@ -7,7 +7,7 @@ A lightweight Go type conversion library with high performance.
 ## Installation
 
 ```bash
-go get github.com/mingzaily/mconv
+go get github.com/graingo/mconv
 ```
 
 ## Features
@@ -47,7 +47,7 @@ personMap := mconv.ToMapFromJSON(`{"name":"Jane"}`) // map[string]interface{}{"n
 ## Generic Support (Go 1.18+)
 
 ```go
-import "github.com/mingzaily/mconv/complex"
+import "github.com/graingo/mconv/complex"
 
 // Slice conversions with generics
 strSlice := complex.ToSliceT[string]([]int{1, 2, 3}) // []string{"1", "2", "3"}
