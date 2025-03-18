@@ -1,6 +1,8 @@
 package basic
 
 import (
+	"fmt"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -31,6 +33,12 @@ func ToTimeE(value interface{}, formats ...string) (time.Time, error) {
 	case int64:
 		result = time.Unix(v, 0)
 	case int32:
+		result = time.Unix(int64(v), 0)
+	case uint:
+		result = time.Unix(int64(v), 0)
+	case uint64:
+		result = time.Unix(int64(v), 0)
+	case uint32:
 		result = time.Unix(int64(v), 0)
 	default:
 		return time.Time{}, internal.NewConversionError(value, "time.Time", internal.ErrUnsupportedType)
@@ -85,4 +93,76 @@ func parseTimeString(s string, formats ...string) (time.Time, error) {
 	}
 
 	return time.Time{}, internal.NewConversionError(s, "time.Time", internal.ErrInvalidTimeFormat)
+}
+
+// ToDuration converts any type to time.Duration.
+func ToDuration(value interface{}) time.Duration {
+	result, _ := ToDurationE(value)
+	return result
+}
+
+// ToDurationE converts any type to time.Duration with error.
+func ToDurationE(value interface{}) (time.Duration, error) {
+	if value == nil {
+		return 0, nil
+	}
+
+	switch v := value.(type) {
+	case time.Duration:
+		return v, nil
+	case int:
+		return time.Duration(v), nil // Integers are treated as nanoseconds
+	case int64:
+		return time.Duration(v), nil // Integers are treated as nanoseconds
+	case int32:
+		return time.Duration(v), nil
+	case int16:
+		return time.Duration(v), nil
+	case int8:
+		return time.Duration(v), nil
+	case uint:
+		return time.Duration(v), nil
+	case uint64:
+		return time.Duration(v), nil
+	case uint32:
+		return time.Duration(v), nil
+	case uint16:
+		return time.Duration(v), nil
+	case uint8:
+		return time.Duration(v), nil
+	case float64:
+		return time.Duration(v), nil // Float values are treated as nanoseconds
+	case float32:
+		return time.Duration(v), nil
+	case string:
+		// Try to parse using time.ParseDuration first (e.g., "1h", "10m", "30s")
+		d, err := time.ParseDuration(v)
+		if err == nil {
+			return d, nil
+		}
+
+		// Try to parse as integer (nanoseconds)
+		if i, err := strconv.ParseInt(v, 10, 64); err == nil {
+			return time.Duration(i), nil
+		}
+
+		// Try to parse as float (nanoseconds)
+		if f, err := strconv.ParseFloat(v, 64); err == nil {
+			return time.Duration(f), nil
+		}
+
+		return 0, internal.NewConversionError(value, "time.Duration", fmt.Errorf("cannot parse %q as duration", v))
+	default:
+		// Handle reflection cases
+		rv := reflect.ValueOf(value)
+		switch rv.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			return time.Duration(rv.Int()), nil
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			return time.Duration(rv.Uint()), nil
+		case reflect.Float32, reflect.Float64:
+			return time.Duration(rv.Float()), nil
+		}
+		return 0, internal.NewConversionError(value, "time.Duration", internal.ErrUnsupportedType)
+	}
 }

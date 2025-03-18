@@ -80,6 +80,10 @@ var (
 	ToTime = basic.ToTime
 	// ToTimeE convert any type to time.Time with error.
 	ToTimeE = basic.ToTimeE
+	// ToDuration convert any type to time.Duration.
+	ToDuration = basic.ToDuration
+	// ToDurationE convert any type to time.Duration with error.
+	ToDurationE = basic.ToDurationE
 )
 
 var (
