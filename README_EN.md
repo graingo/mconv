@@ -2,91 +2,91 @@
 
 [中文](README.md) | [English](README_EN.md)
 
-一个轻量级的高性能 Go 类型转换库。
+A lightweight Go type conversion library with high performance.
 
-## 安装
+## Installation
 
 ```bash
 go get github.com/graingo/mconv
 ```
 
-## 特性
+## Features
 
-- 简单直观的 API
-- 零依赖
-- 全面的类型转换支持
-- 线程安全
-- 高性能缓存机制
-- 泛型支持（Go 1.18+）
-- 反射结果缓存
+- Simple and intuitive API
+- Zero dependencies
+- Comprehensive type conversion support
+- Thread-safe
+- High performance with caching mechanisms
+- Generic support (Go 1.18+)
+- Reflection result caching
 
-## 基本用法
+## Basic Usage
 
 ```go
-// 基本类型转换
+// Basic type conversions
 str := mconv.ToString(123)        // "123"
 num := mconv.ToInt("123")         // 123
 b := mconv.ToBool(1)              // true
 f := mconv.ToFloat64("123.45")    // 123.45
 t := mconv.ToTime("2006-01-02")   // time.Time
 
-// 带错误处理
+// With error handling
 str, err := mconv.ToStringE(123)  // "123", nil
 num, err := mconv.ToIntE("abc")   // 0, error
 
-// 复杂类型转换
+// Complex type conversions
 slice := mconv.ToSlice([]int{1, 2, 3})  // []interface{}{1, 2, 3}
 strSlice := mconv.ToStringSlice([]int{1, 2, 3}) // []string{"1", "2", "3"}
 m := mconv.ToMap(map[string]int{"a": 1}) // map[string]interface{}{"a": 1}
 
-// JSON 转换
+// JSON conversions
 jsonStr := mconv.ToJSON(map[string]interface{}{"name": "John"}) // {"name":"John"}
 personMap := mconv.ToMapFromJSON(`{"name":"Jane"}`) // map[string]interface{}{"name": "Jane"}
 
-// Struct 转换
+// Struct conversion
 type Person struct {
     Name string `mconv:"name"`
     Age  int    `mconv:"age"`
 }
 sourceMap := map[string]interface{}{"name": "Alex", "age": 28}
 var person Person
-err := mconv.Struct(sourceMap, &person) // person 现在是 {Name: "Alex", Age: 28}
+err := mconv.Struct(sourceMap, &person) // person is now {Name: "Alex", Age: 28}
 ```
 
-## 泛型支持（Go 1.18+）
+## Generic Support (Go 1.18+)
 
 ```go
 import "github.com/graingo/mconv/complex"
 
-// 使用泛型进行切片转换
+// Slice conversions with generics
 strSlice := complex.ToSliceT[string]([]int{1, 2, 3}) // []string{"1", "2", "3"}
 intSlice := complex.ToSliceT[int]([]string{"1", "2", "3"}) // []int{1, 2, 3}
 
-// 使用泛型进行映射转换
+// Map conversions with generics
 strMap := complex.ToMapT[string, string](map[string]int{"a": 1}) // map[string]string{"a": "1"}
 intMap := complex.ToMapT[string, int](map[string]interface{}{"a": "1"}) // map[string]int{"a": 1}
 ```
 
-## 性能优化
+## Performance Optimization
 
 ```go
-// 设置缓存大小
-mconv.SetStringCacheSize(2000)       // 设置字符串缓存大小（默认 1000）
-mconv.SetTimeCacheSize(200)          // 设置时间缓存大小（默认 100）
-mconv.SetTypeInfoCacheSize(1000)     // 设置类型信息缓存大小（默认 1000）
-mconv.SetConversionCacheSize(1000)   // 设置转换缓存大小（默认 1000）
+// Set cache sizes
+mconv.SetStringCacheSize(2000)       // Set string cache size (default 1000)
+mconv.SetTimeCacheSize(200)          // Set time cache size (default 100)
+mconv.SetTypeInfoCacheSize(1000)     // Set type info cache size (default 1000)
+mconv.SetConversionCacheSize(1000)   // Set conversion cache size (default 1000)
 
-// 清除缓存
-mconv.ClearStringCache()             // 清除字符串缓存
-mconv.ClearTimeCache()               // 清除时间缓存
-mconv.ClearTypeInfoCache()           // 清除类型信息缓存
-mconv.ClearConversionCache()         // 清除转换缓存
-mconv.ClearAllCaches()               // 清除所有缓存
+// Clear caches
+mconv.ClearStringCache()             // Clear string cache
+mconv.ClearTimeCache()               // Clear time cache
+mconv.ClearTypeInfoCache()           // Clear type info cache
+mconv.ClearConversionCache()         // Clear conversion cache
+mconv.ClearAllCaches()               // Clear all caches
 ```
 
-## 基准测试结果
+## Benchmark Results
 
-以下基准测试结果在 Apple M2 处理器上测量：
+The following benchmark results were measured on an Apple M2 processor:
 
 ```
 BenchmarkToString-8                 13534419               107.5 ns/op            8 B/op           1 allocs/op
@@ -100,47 +100,47 @@ BenchmarkToMap-8                     7964676               153.1 ns/op          
 BenchmarkToJSON-8                    3466358               348.2 ns/op           192 B/op           7 allocs/op
 ```
 
-泛型函数：
+Generic functions:
 
 ```
 BenchmarkToSliceT-8                  2906990               397.6 ns/op          136 B/op           6 allocs/op
 BenchmarkToMapT-8                    1654909               723.4 ns/op          688 B/op           7 allocs/op
 ```
 
-## 反射缓存性能优势
+## Reflection Caching Benefits
 
-反射缓存是 mconv 库的一个重要特性，它可以显著提高类型转换的性能。以下基准测试结果展示了反射缓存的性能优势：
+Reflection caching is a key feature of the mconv library that significantly improves type conversion performance. The following benchmark results demonstrate the performance advantages of reflection caching:
 
 ```
 BenchmarkReflectionCache_TypeInfo/WithoutCache-8           8842224               133.9 ns/op            56 B/op           7 allocs/op
 BenchmarkReflectionCache_TypeInfo/WithCache-8             25792029                49.03 ns/op            0 B/op           0 allocs/op
 ```
 
-从上述结果可以看出：
+From these results, we can observe:
 
-1. **性能提升**：使用反射缓存后，处理相同类型的反射操作速度提高了约 2.7 倍（从 133.9 ns/op 降至 49.03 ns/op）。
-2. **内存优化**：使用缓存后，内存分配从每次操作 56 字节和 7 次分配减少到 0 字节和 0 次分配，完全消除了内存分配开销。
-3. **吞吐量提升**：每秒可处理的操作数从约 880 万增加到约 2580 万，提高了约 192%。
+1. **Performance Improvement**: With reflection caching, processing the same type of reflection operations is about 2.7 times faster (from 133.9 ns/op to 49.03 ns/op).
+2. **Memory Optimization**: With caching, memory allocation is reduced from 56 bytes and 7 allocations per operation to 0 bytes and 0 allocations, completely eliminating memory allocation overhead.
+3. **Throughput Increase**: The number of operations that can be processed per second increases from about 8.8 million to about 25.8 million, an improvement of approximately 192%.
 
-对于大型数据结构，性能优势更加明显：
+For large data structures, the benefits are even more significant:
 
 ```
 BenchmarkLargeSliceConversion/WithoutCache-8                  9327             121340 ns/op         46738 B/op        1747 allocs/op
 BenchmarkLargeSliceConversion/WithCache-8                     9620             121506 ns/op         46738 B/op        1747 allocs/op
 ```
 
-这些优势在处理大型数据集或需要频繁进行类型转换的应用中尤为明显。反射缓存通过存储类型信息和转换结果，避免了重复的反射操作，从而显著提高了性能。
+These advantages are particularly evident in applications that process large datasets or require frequent type conversions. Reflection caching stores type information and conversion results, avoiding repeated reflection operations, thereby significantly improving performance.
 
-## 使用场景
+## Use Cases
 
-反射缓存在以下场景中特别有用：
+Reflection caching is particularly useful in the following scenarios:
 
-1. **API 服务**：需要频繁将数据在不同格式之间转换
-2. **数据处理管道**：处理大量结构相似的数据
-3. **ORM 和数据映射**：在数据库记录和结构体之间进行映射
-4. **配置处理**：解析和转换各种格式的配置数据
-5. **JSON/XML 处理**：频繁进行序列化和反序列化操作
+1. **API Services**: Frequently converting data between different formats
+2. **Data Processing Pipelines**: Processing large amounts of structurally similar data
+3. **ORM and Data Mapping**: Mapping between database records and structs
+4. **Configuration Processing**: Parsing and converting configuration data in various formats
+5. **JSON/XML Processing**: Frequent serialization and deserialization operations
 
-## 许可证
+## License
 
-MIT 许可证
+MIT License
