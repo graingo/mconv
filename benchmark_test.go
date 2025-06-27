@@ -257,7 +257,7 @@ func BenchmarkStructConversion(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		_ = complex.StructE(source, &target)
+		_ = complex.ToStructE(source, &target)
 	}
 }
 
@@ -270,7 +270,7 @@ func BenchmarkStructConversionParallel(b *testing.B) {
 	b.RunParallel(func(pb *testing.PB) {
 		var target UserWithTags
 		for pb.Next() {
-			_ = complex.StructE(source, &target)
+			_ = complex.ToStructE(source, &target)
 		}
 	})
 }

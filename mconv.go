@@ -141,12 +141,10 @@ var (
 	// ToSliceFromJSONE convert json to slice with error.
 	ToSliceFromJSONE = complex.ToSliceFromJSONE
 
-	// Struct convert map or struct to struct.
-	Struct = complex.Struct
-	// StructE convert map or struct to struct with error.
-	StructE = complex.StructE
-	// Scan is an alias of Struct.
-	Scan = complex.Scan
+	// ToStruct convert map or struct to struct.
+	ToStruct = complex.ToStruct
+	// ToStructE convert map or struct to struct with error.
+	ToStructE = complex.ToStructE
 )
 
 // Export cache related functions

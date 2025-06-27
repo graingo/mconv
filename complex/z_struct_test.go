@@ -57,7 +57,7 @@ func TestStruct(t *testing.T) {
 	t.Run("SimpleConversion", func(t *testing.T) {
 		source := map[string]interface{}{"ID": 1, "Name": "Alice"}
 		var target SimpleUser
-		err := complex.StructE(source, &target)
+		err := complex.ToStructE(source, &target)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -70,7 +70,7 @@ func TestStruct(t *testing.T) {
 	t.Run("WithTags", func(t *testing.T) {
 		source := map[string]interface{}{"user_id": 2, "user_name": "Bob"}
 		var target UserWithTags
-		err := complex.StructE(source, &target)
+		err := complex.ToStructE(source, &target)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -83,7 +83,7 @@ func TestStruct(t *testing.T) {
 	t.Run("CaseInsensitive", func(t *testing.T) {
 		source := map[string]interface{}{"id": 3, "nAmE": "Charlie"}
 		var target SimpleUser
-		err := complex.StructE(source, &target)
+		err := complex.ToStructE(source, &target)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -101,7 +101,7 @@ func TestStruct(t *testing.T) {
 			"Balance":   123.45,
 		}
 		var target UserWithBoolFloat
-		err := complex.StructE(source, &target)
+		err := complex.ToStructE(source, &target)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -126,7 +126,7 @@ func TestStruct(t *testing.T) {
 			},
 		}
 		var target NestedUser
-		err := complex.StructE(source, &target)
+		err := complex.ToStructE(source, &target)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -147,7 +147,7 @@ func TestStruct(t *testing.T) {
 			"created_at": timeStr,
 		}
 		var target UserWithTime
-		err := complex.StructE(source, &target)
+		err := complex.ToStructE(source, &target)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -164,7 +164,7 @@ func TestStruct(t *testing.T) {
 			"is_active": 1,
 		}
 		var target UserWithBoolFloat
-		err := complex.StructE(source, &target)
+		err := complex.ToStructE(source, &target)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -182,7 +182,7 @@ func TestStruct(t *testing.T) {
 			"duration": "30s",
 		}
 		var target TestDuration
-		err := complex.StructE(source, &target)
+		err := complex.ToStructE(source, &target)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -214,7 +214,7 @@ func TestStruct(t *testing.T) {
 
 		source := map[string]interface{}{"ID": 6, "is_cool": 1}
 		var target HookUser
-		err := complex.StructE(source, &target, intToStringHook)
+		err := complex.ToStructE(source, &target, intToStringHook)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}
@@ -232,7 +232,7 @@ func TestStruct(t *testing.T) {
 			"Email": "embed@example.com",
 		}
 		var target UserWithEmbedded
-		err := complex.StructE(source, &target)
+		err := complex.ToStructE(source, &target)
 		if err != nil {
 			t.Fatalf("unexpected error: %v", err)
 		}

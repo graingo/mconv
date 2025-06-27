@@ -18,16 +18,16 @@ import (
 // If an error occurs during conversion, it should return nil and the error.
 type HookFunc func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error)
 
-// Struct converts a map or a struct to a struct.
+// ToStruct converts a map or a struct to a struct.
 // The `pointer` parameter should be a pointer to a struct.
 // It supports `mconv` tag for custom field mapping.
 // It accepts optional HookFuncs to provide custom conversion logic.
-func Struct(source, pointer interface{}, hooks ...HookFunc) {
-	_ = StructE(source, pointer, hooks...)
+func ToStruct(source, pointer interface{}, hooks ...HookFunc) {
+	_ = ToStructE(source, pointer, hooks...)
 }
 
 // StructE is the same as Struct but returns an error.
-func StructE(source, pointer interface{}, hooks ...HookFunc) error {
+func ToStructE(source, pointer interface{}, hooks ...HookFunc) error {
 	if pointer == nil {
 		return errors.New("pointer cannot be nil")
 	}
@@ -201,7 +201,7 @@ func setFieldValue(field reflect.Value, value interface{}, hooks ...HookFunc) er
 		field.SetBool(b)
 	case reflect.Struct:
 		// Recursive call for nested structs
-		return StructE(value, field.Addr().Interface(), hooks...)
+		return ToStructE(value, field.Addr().Interface(), hooks...)
 	case reflect.Slice:
 		sliceData, err := ToSliceE(value)
 		if err != nil {
@@ -245,11 +245,6 @@ func setFieldValue(field reflect.Value, value interface{}, hooks ...HookFunc) er
 		return internal.NewConversionError(value, field.Type().String(), internal.ErrUnsupportedType)
 	}
 	return nil
-}
-
-// Scan is an alias for Struct.
-func Scan(source, pointer interface{}, hooks ...HookFunc) error {
-	return StructE(source, pointer, hooks...)
 }
 
 // getDecoder retrieves a decoder for a given struct type from the cache.
