@@ -1,4 +1,4 @@
-package mconv_test
+package basic_test
 
 import (
 	"testing"

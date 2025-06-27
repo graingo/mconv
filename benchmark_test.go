@@ -243,6 +243,12 @@ func BenchmarkToSliceFromJSONE(b *testing.B) {
 
 // --- Test Structs for Benchmarking ---
 
+type UserWithTags struct {
+	UserID   int    `mconv:"user_id"`
+	UserName string `mconv:"user_name"`
+	Email    string `mconv:"email,omitempty"`
+}
+
 func BenchmarkStructConversion(b *testing.B) {
 	source := map[string]interface{}{"user_id": 2, "user_name": "Bob"}
 	var target UserWithTags
