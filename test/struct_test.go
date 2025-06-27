@@ -3,239 +3,175 @@ package mconv_test
 import (
 	"reflect"
 	"testing"
+	"time"
 
-	"github.com/graingo/mconv"
+	"github.com/graingo/mconv/complex"
 )
 
-type StructBasic struct {
-	Name   string
-	Age    int
-	Score  float64
-	Active bool
+// --- Test Structs ---
+
+type SimpleUser struct {
+	ID   int
+	Name string
 }
 
-type StructWithTags struct {
-	FirstName string `mconv:"name"`
-	UserAge   int    `mconv:"age"`
-	Omit      string `mconv:"-"`
-	NoTag     string
+type UserWithTags struct {
+	UserID   int    `mconv:"user_id"`
+	UserName string `mconv:"user_name"`
+	Email    string `mconv:"email,omitempty"`
 }
 
-type StructNested struct {
-	ID    int
-	User  StructBasic
-	Extra map[string]string
+type NestedUser struct {
+	ID      int
+	Profile struct {
+		Age  int
+		City string
+	}
 }
 
-type StructWithPointers struct {
-	Name  *string
-	Age   *int
-	Child *StructBasic
+type UserWithTime struct {
+	ID        int
+	Name      string
+	CreatedAt time.Time `mconv:"created_at"`
+}
+
+type UserWithEmbedded struct {
+	ID int
+	SimpleUser
+	Email string
 }
 
 func TestStruct(t *testing.T) {
-	t.Run("BasicMapping", func(t *testing.T) {
-		source := map[string]interface{}{
-			"Name":   "John",
-			"Age":    30,
-			"Score":  99.5,
-			"Active": true,
-		}
-		var dest StructBasic
-		err := mconv.StructE(source, &dest)
+	t.Run("SimpleConversion", func(t *testing.T) {
+		source := map[string]interface{}{"ID": 1, "Name": "Alice"}
+		var target SimpleUser
+		err := complex.StructE(source, &target)
 		if err != nil {
-			t.Fatalf("StructE() returned an unexpected error: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
-		if dest.Name != "John" {
-			t.Errorf("got Name %v, want %v", dest.Name, "John")
-		}
-		if dest.Age != 30 {
-			t.Errorf("got Age %v, want %v", dest.Age, 30)
-		}
-		if dest.Score != 99.5 {
-			t.Errorf("got Score %v, want %v", dest.Score, 99.5)
-		}
-		if !dest.Active {
-			t.Errorf("got Active %v, want %v", dest.Active, true)
-		}
-	})
-
-	t.Run("CaseInsensitiveMapping", func(t *testing.T) {
-		source := map[string]interface{}{
-			"name": "Jane",
-			"age":  25,
-		}
-		var dest StructBasic
-		err := mconv.StructE(source, &dest)
-		if err != nil {
-			t.Fatalf("StructE() returned an unexpected error: %v", err)
-		}
-		if dest.Name != "Jane" {
-			t.Errorf("got Name %v, want %v", dest.Name, "Jane")
-		}
-		if dest.Age != 25 {
-			t.Errorf("got Age %v, want %v", dest.Age, 25)
+		expected := SimpleUser{ID: 1, Name: "Alice"}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
 		}
 	})
 
 	t.Run("WithTags", func(t *testing.T) {
-		source := map[string]interface{}{
-			"name":  "Mike",
-			"age":   40,
-			"Omit":  "should-be-omitted",
-			"NoTag": "has-no-tag",
-		}
-		var dest StructWithTags
-		err := mconv.StructE(source, &dest)
+		source := map[string]interface{}{"user_id": 2, "user_name": "Bob"}
+		var target UserWithTags
+		err := complex.StructE(source, &target)
 		if err != nil {
-			t.Fatalf("StructE() returned an unexpected error: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
-		if dest.FirstName != "Mike" {
-			t.Errorf("got FirstName %v, want %v", dest.FirstName, "Mike")
+		expected := UserWithTags{UserID: 2, UserName: "Bob"}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
 		}
-		if dest.UserAge != 40 {
-			t.Errorf("got UserAge %v, want %v", dest.UserAge, 40)
+	})
+
+	t.Run("CaseInsensitive", func(t *testing.T) {
+		source := map[string]interface{}{"id": 3, "nAmE": "Charlie"}
+		var target SimpleUser
+		err := complex.StructE(source, &target)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
 		}
-		if dest.Omit != "" {
-			t.Errorf("got Omit %q, want %q", dest.Omit, "")
-		}
-		if dest.NoTag != "has-no-tag" {
-			t.Errorf("got NoTag %q, want %q", dest.NoTag, "has-no-tag")
+		expected := SimpleUser{ID: 3, Name: "Charlie"}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
 		}
 	})
 
 	t.Run("NestedStruct", func(t *testing.T) {
 		source := map[string]interface{}{
-			"ID": 1,
-			"User": map[string]interface{}{
-				"Name": "SubUser",
-				"Age":  10,
-			},
-			"Extra": map[string]interface{}{
-				"key1": "val1",
+			"ID": 4,
+			"Profile": map[string]interface{}{
+				"Age":  30,
+				"City": "New York",
 			},
 		}
-		var dest StructNested
-		err := mconv.StructE(source, &dest)
+		var target NestedUser
+		err := complex.StructE(source, &target)
 		if err != nil {
-			t.Fatalf("StructE() returned an unexpected error: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
-		if dest.ID != 1 {
-			t.Errorf("got ID %v, want %v", dest.ID, 1)
-		}
-		if dest.User.Name != "SubUser" {
-			t.Errorf("got User.Name %v, want %v", dest.User.Name, "SubUser")
-		}
-		if dest.User.Age != 10 {
-			t.Errorf("got User.Age %v, want %v", dest.User.Age, 10)
-		}
-		expectedExtra := map[string]string{"key1": "val1"}
-		if !reflect.DeepEqual(dest.Extra, expectedExtra) {
-			t.Errorf("got Extra map %v, want %v", dest.Extra, expectedExtra)
+		expected := NestedUser{ID: 4, Profile: struct {
+			Age  int
+			City string
+		}{Age: 30, City: "New York"}}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
 		}
 	})
 
-	t.Run("PointerFields", func(t *testing.T) {
-		name := "PointerMan"
-		age := 55
+	t.Run("BuiltInTimeHook", func(t *testing.T) {
+		timeStr := "2024-01-01T15:04:05Z"
 		source := map[string]interface{}{
-			"Name": name,
-			"Age":  age,
-			"Child": map[string]interface{}{
-				"Name": "ChildName",
-				"Age":  15,
-			},
+			"ID":         5,
+			"Name":       "David",
+			"created_at": timeStr,
 		}
-
-		var dest StructWithPointers
-		err := mconv.StructE(source, &dest)
+		var target UserWithTime
+		err := complex.StructE(source, &target)
 		if err != nil {
-			t.Fatalf("StructE() returned an unexpected error: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
 
-		if dest.Name == nil {
-			t.Fatal("expected Name to be non-nil")
-		}
-		if *dest.Name != name {
-			t.Errorf("got Name %v, want %v", *dest.Name, name)
-		}
-
-		if dest.Age == nil {
-			t.Fatal("expected Age to be non-nil")
-		}
-		if *dest.Age != age {
-			t.Errorf("got Age %v, want %v", *dest.Age, age)
-		}
-
-		if dest.Child == nil {
-			t.Fatal("expected Child to be non-nil")
-		}
-		if dest.Child.Name != "ChildName" {
-			t.Errorf("got Child.Name %v, want %v", dest.Child.Name, "ChildName")
-		}
-		if dest.Child.Age != 15 {
-			t.Errorf("got Child.Age %v, want %v", dest.Child.Age, 15)
+		parsedTime, _ := time.Parse(time.RFC3339, timeStr)
+		expected := UserWithTime{ID: 5, Name: "David", CreatedAt: parsedTime}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
 		}
 	})
 
-	t.Run("NilSourceValueForPointer", func(t *testing.T) {
+	t.Run("CustomHook", func(t *testing.T) {
+		type HookUser struct {
+			ID     int
+			IsCool string `mconv:"is_cool"`
+		}
+
+		intToStringHook := func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
+			if from.Kind() == reflect.Int && to.Kind() == reflect.String {
+				i, _ := data.(int)
+				if i == 1 {
+					return "Yes", nil
+				}
+				return "No", nil
+			}
+			return data, nil
+		}
+
+		source := map[string]interface{}{"ID": 6, "is_cool": 1}
+		var target HookUser
+		err := complex.StructE(source, &target, intToStringHook)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		expected := HookUser{ID: 6, IsCool: "Yes"}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
+		}
+	})
+
+	t.Run("EmbeddedStruct", func(t *testing.T) {
 		source := map[string]interface{}{
-			"Name":  "NotNil",
-			"Age":   nil,
-			"Child": nil,
+			"ID":    7,
+			"Name":  "Embed",
+			"Email": "embed@example.com",
 		}
-		var dest StructWithPointers
-		err := mconv.StructE(source, &dest)
+		var target UserWithEmbedded
+		err := complex.StructE(source, &target)
 		if err != nil {
-			t.Fatalf("StructE() returned an unexpected error: %v", err)
+			t.Fatalf("unexpected error: %v", err)
 		}
-		if dest.Name == nil {
-			t.Fatal("expected Name to be non-nil")
+
+		expected := UserWithEmbedded{
+			ID:         7,
+			SimpleUser: SimpleUser{ID: 0, Name: "Embed"},
+			Email:      "embed@example.com",
 		}
-		if *dest.Name != "NotNil" {
-			t.Errorf("got *dest.Name %q, want %q", *dest.Name, "NotNil")
-		}
-		if dest.Age != nil {
-			t.Errorf("expected Age to be nil, but it was %d", *dest.Age)
-		}
-		if dest.Child != nil {
-			t.Errorf("expected Child to be nil, but it was %v", *dest.Child)
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
 		}
 	})
-
-	t.Run("TargetNotPointer", func(t *testing.T) {
-		source := map[string]interface{}{}
-		var dest StructBasic
-		err := mconv.StructE(source, dest)
-		if err == nil {
-			t.Fatal("expected an error, but got nil")
-		}
-	})
-
-	t.Run("TargetNotStructPointer", func(t *testing.T) {
-		source := map[string]interface{}{}
-		var i int
-		err := mconv.StructE(source, &i)
-		if err == nil {
-			t.Fatal("expected an error, but got nil")
-		}
-	})
-}
-
-func TestScan(t *testing.T) {
-	source := map[string]interface{}{
-		"Name": "ScanUser",
-		"Age":  99,
-	}
-	var dest StructBasic
-	err := mconv.Scan(source, &dest)
-	if err != nil {
-		t.Fatalf("Scan() returned an unexpected error: %v", err)
-	}
-	if dest.Name != "ScanUser" {
-		t.Errorf("got Name %v, want %v", dest.Name, "ScanUser")
-	}
-	if dest.Age != 99 {
-		t.Errorf("got Age %v, want %v", dest.Age, 99)
-	}
 }

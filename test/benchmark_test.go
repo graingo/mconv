@@ -4,7 +4,10 @@ import (
 	"testing"
 
 	"github.com/graingo/mconv"
+	"github.com/graingo/mconv/complex"
 )
+
+// --- Test Basic for Benchmarking ---
 
 func BenchmarkToString(b *testing.B) {
 	for i := 0; i < b.N; i++ {
@@ -236,4 +239,32 @@ func BenchmarkToSliceFromJSONE(b *testing.B) {
 	for i := 0; i < b.N; i++ {
 		_, _ = mconv.ToSliceFromJSONE(json)
 	}
+}
+
+// --- Test Structs for Benchmarking ---
+
+func BenchmarkStructConversion(b *testing.B) {
+	source := map[string]interface{}{"user_id": 2, "user_name": "Bob"}
+	var target UserWithTags
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	for i := 0; i < b.N; i++ {
+		_ = complex.StructE(source, &target)
+	}
+}
+
+func BenchmarkStructConversionParallel(b *testing.B) {
+	source := map[string]interface{}{"user_id": 2, "user_name": "Bob"}
+
+	b.ReportAllocs()
+	b.ResetTimer()
+
+	b.RunParallel(func(pb *testing.PB) {
+		var target UserWithTags
+		for pb.Next() {
+			_ = complex.StructE(source, &target)
+		}
+	})
 }

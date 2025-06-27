@@ -219,3 +219,53 @@ func ClearAllReflectCaches() {
 	ClearTypeInfoCache()
 	ClearConversionCache()
 }
+
+// DecoderCacheKey is the key for the decoder cache.
+// It includes the destination type and the number of hooks,
+// as different hooks can result in different decoding plans.
+type DecoderCacheKey struct {
+	DestType reflect.Type
+	NumHooks int
+}
+
+// FieldDecoder holds the decoding plan for a single struct field.
+type FieldDecoder struct {
+	// Field represents the struct field to be decoded into.
+	Field reflect.StructField
+	// Index is the field's index in the struct.
+	Index []int
+	// Name is the key name in the source map to look for.
+	Name string
+}
+
+// Decoder holds the complete decoding plan for a struct type.
+type Decoder struct {
+	// Fields is a map from the source map key to the field decoder.
+	// It's used for fast lookups.
+	Fields map[string]*FieldDecoder
+	// FieldArr is an array of all field decoders.
+	FieldArr []*FieldDecoder
+}
+
+var (
+	// structDecoderCache stores the cached decoders for struct types.
+	structDecoderCache = &sync.Map{}
+)
+
+// GetDecoder gets a decoder for a given type from the cache.
+func GetDecoder(key DecoderCacheKey) (*Decoder, bool) {
+	if v, ok := structDecoderCache.Load(key); ok {
+		return v.(*Decoder), true
+	}
+	return nil, false
+}
+
+// SetDecoder stores a decoder in the cache.
+func SetDecoder(key DecoderCacheKey, decoder *Decoder) {
+	structDecoderCache.Store(key, decoder)
+}
+
+// ClearDecoderCache clears the decoder cache.
+func ClearDecoderCache() {
+	structDecoderCache = &sync.Map{}
+}

@@ -43,15 +43,106 @@ m := mconv.ToMap(map[string]int{"a": 1}) // map[string]interface{}{"a": 1}
 jsonStr := mconv.ToJSON(map[string]interface{}{"name": "John"}) // {"name":"John"}
 personMap := mconv.ToMapFromJSON(`{"name":"Jane"}`) // map[string]interface{}{"name": "Jane"}
 
-// Struct conversion
-type Person struct {
-    Name string `mconv:"name"`
-    Age  int    `mconv:"age"`
-}
-sourceMap := map[string]interface{}{"name": "Alex", "age": 28}
-var person Person
-err := mconv.Struct(sourceMap, &person) // person is now {Name: "Alex", Age: 28}
+// Struct conversion is now more powerful, see the dedicated section below.
 ```
+
+### Advanced Struct Conversion
+
+The `mconv` package provides a powerful `Struct` function (and its error-returning counterpart `StructE`) in the `complex` sub-package. This utility is designed for flexible and high-performance conversion of `map[string]interface{}` or other `structs` into a target `struct`. It leverages caching for repeated conversions to achieve significant speed improvements.
+
+**Key Features:**
+
+- **Simple Conversion**: Directly map data to a struct's fields.
+- **Tag-Driven Mapping**: Use the `mconv` tag to map data from keys with different names.
+- **Case-Insensitive**: Automatically matches source keys to struct fields regardless of case.
+- **Nested Structs**: Recursively converts nested maps or structs.
+- **Extensible with Hooks**: Provide custom `HookFunc` functions to handle special conversion logic.
+- **High Performance**: Caches struct analysis results to make subsequent conversions extremely fast.
+
+**Basic Usage**
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/graingo/mconv/complex"
+)
+
+func main() {
+	type User struct {
+		ID   int    `mconv:"user_id"`
+		Name string `mconv:"user_name"`
+	}
+
+	source := map[string]interface{}{
+		"user_id":   123,
+		"USER_NAME": "Alice", // Case-insensitive matching
+	}
+
+	var user User
+	err := complex.StructE(source, &user)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("%+v\n", user)
+	// Output: {ID:123 Name:Alice}
+}
+```
+
+**Using Hooks**
+
+You can inject custom logic using hooks. For example, converting an integer status to a string.
+
+```go
+package main
+
+import (
+	"fmt"
+	"github.com/graingo/mconv/complex"
+	"reflect"
+)
+
+func main() {
+	type Post struct {
+		Title  string
+		Status string `mconv:"status"`
+	}
+
+	// This hook converts an int status to a string representation.
+	intStatusToStringHook := func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
+		if from.Kind() == reflect.Int && to.Kind() == reflect.String {
+			i, _ := data.(int)
+			switch i {
+			case 0:
+				return "Draft", nil
+			case 1:
+				return "Published", nil
+			default:
+				return "Unknown", nil
+			}
+		}
+		return data, nil
+	}
+
+	source := map[string]interface{}{
+		"Title":  "Hello World",
+		"status": 1,
+	}
+
+	var post Post
+	err := complex.StructE(source, &post, intStatusToStringHook)
+	if err != nil {
+		panic(err)
+	}
+
+	fmt.Printf("%+v\n", post)
+	// Output: {Title:Hello World Status:Published}
+}
+```
+
+By default, `mconv` includes a built-in hook to handle conversions from `string` to `time.Time`.
 
 ## Generic Support (Go 1.18+)
 
@@ -105,6 +196,13 @@ Generic functions:
 ```
 BenchmarkToSliceT-8                  2906990               397.6 ns/op          136 B/op           6 allocs/op
 BenchmarkToMapT-8                    1654909               723.4 ns/op          688 B/op           7 allocs/op
+```
+
+Struct conversion:
+
+```
+BenchmarkStructConversion-8              7186039           166.4 ns/op          0 B/op          0 allocs/op
+BenchmarkStructConversionParallel-8     36372223            40.26 ns/op         0 B/op          0 allocs/op
 ```
 
 ## Reflection Caching Benefits
