@@ -48,6 +48,11 @@ type UserWithBoolFloat struct {
 	Balance  float32
 }
 
+type TestDuration struct {
+	ID       int
+	Duration time.Duration `mconv:"duration"`
+}
+
 func TestStruct(t *testing.T) {
 	t.Run("SimpleConversion", func(t *testing.T) {
 		source := map[string]interface{}{"ID": 1, "Name": "Alice"}
@@ -166,6 +171,24 @@ func TestStruct(t *testing.T) {
 
 		expected := UserWithBoolFloat{
 			IsActive: true,
+		}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
+		}
+	})
+
+	t.Run("BuiltInStringToDurationHook", func(t *testing.T) {
+		source := map[string]interface{}{
+			"duration": "30s",
+		}
+		var target TestDuration
+		err := complex.StructE(source, &target)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		expected := TestDuration{
+			Duration: 30 * time.Second,
 		}
 		if !reflect.DeepEqual(target, expected) {
 			t.Errorf("expected %+v, got %+v", expected, target)

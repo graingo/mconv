@@ -25,6 +25,22 @@ func stringToTimeHookFunc() HookFunc {
 	}
 }
 
+// stringToDurationHookFunc returns a HookFunc that converts string to time.Duration.
+func stringToDurationHookFunc() HookFunc {
+	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
+		if from.Kind() != reflect.String || to != reflect.TypeOf(time.Duration(0)) {
+			return data, nil
+		}
+
+		s, ok := data.(string)
+		if !ok {
+			return data, nil
+		}
+
+		return basic.ToDurationE(s)
+	}
+}
+
 // intToBoolHookFunc returns a HookFunc that converts integer to bool.
 func intToBoolHookFunc() HookFunc {
 	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
