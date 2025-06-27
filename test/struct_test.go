@@ -41,6 +41,13 @@ type UserWithEmbedded struct {
 	Email string
 }
 
+type UserWithBoolFloat struct {
+	ID       int
+	IsActive bool    `mconv:"is_active"`
+	Score    float64 `mconv:"score"`
+	Balance  float32
+}
+
 func TestStruct(t *testing.T) {
 	t.Run("SimpleConversion", func(t *testing.T) {
 		source := map[string]interface{}{"ID": 1, "Name": "Alice"}
@@ -169,6 +176,30 @@ func TestStruct(t *testing.T) {
 			ID:         7,
 			SimpleUser: SimpleUser{ID: 0, Name: "Embed"},
 			Email:      "embed@example.com",
+		}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
+		}
+	})
+
+	t.Run("BoolAndFloatConversion", func(t *testing.T) {
+		source := map[string]interface{}{
+			"ID":        8,
+			"is_active": true,
+			"score":     99.9,
+			"Balance":   123.45,
+		}
+		var target UserWithBoolFloat
+		err := complex.StructE(source, &target)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		expected := UserWithBoolFloat{
+			ID:       8,
+			IsActive: true,
+			Score:    99.9,
+			Balance:  123.45,
 		}
 		if !reflect.DeepEqual(target, expected) {
 			t.Errorf("expected %+v, got %+v", expected, target)
