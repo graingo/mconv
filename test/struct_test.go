@@ -88,6 +88,30 @@ func TestStruct(t *testing.T) {
 		}
 	})
 
+	t.Run("BoolAndFloatConversion", func(t *testing.T) {
+		source := map[string]interface{}{
+			"ID":        8,
+			"is_active": true,
+			"score":     99.9,
+			"Balance":   123.45,
+		}
+		var target UserWithBoolFloat
+		err := complex.StructE(source, &target)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		expected := UserWithBoolFloat{
+			ID:       8,
+			IsActive: true,
+			Score:    99.9,
+			Balance:  123.45,
+		}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
+		}
+	})
+
 	t.Run("NestedStruct", func(t *testing.T) {
 		source := map[string]interface{}{
 			"ID": 4,
@@ -125,6 +149,24 @@ func TestStruct(t *testing.T) {
 
 		parsedTime, _ := time.Parse(time.RFC3339, timeStr)
 		expected := UserWithTime{ID: 5, Name: "David", CreatedAt: parsedTime}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
+		}
+	})
+
+	t.Run("BuiltInIntToBoolHook", func(t *testing.T) {
+		source := map[string]interface{}{
+			"is_active": 1,
+		}
+		var target UserWithBoolFloat
+		err := complex.StructE(source, &target)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		expected := UserWithBoolFloat{
+			IsActive: true,
+		}
 		if !reflect.DeepEqual(target, expected) {
 			t.Errorf("expected %+v, got %+v", expected, target)
 		}
@@ -182,27 +224,4 @@ func TestStruct(t *testing.T) {
 		}
 	})
 
-	t.Run("BoolAndFloatConversion", func(t *testing.T) {
-		source := map[string]interface{}{
-			"ID":        8,
-			"is_active": true,
-			"score":     99.9,
-			"Balance":   123.45,
-		}
-		var target UserWithBoolFloat
-		err := complex.StructE(source, &target)
-		if err != nil {
-			t.Fatalf("unexpected error: %v", err)
-		}
-
-		expected := UserWithBoolFloat{
-			ID:       8,
-			IsActive: true,
-			Score:    99.9,
-			Balance:  123.45,
-		}
-		if !reflect.DeepEqual(target, expected) {
-			t.Errorf("expected %+v, got %+v", expected, target)
-		}
-	})
 }

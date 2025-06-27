@@ -33,7 +33,7 @@ func StructE(source, pointer interface{}, hooks ...HookFunc) error {
 	}
 
 	// Prepend default hooks
-	allHooks := []HookFunc{stringToTimeHookFunc()}
+	allHooks := []HookFunc{stringToTimeHookFunc(), intToBoolHookFunc()}
 	allHooks = append(allHooks, hooks...)
 
 	// Get the reflect.Value of the pointer and the struct

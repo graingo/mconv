@@ -24,3 +24,26 @@ func stringToTimeHookFunc() HookFunc {
 		return basic.ToTimeE(s)
 	}
 }
+
+// intToBoolHookFunc returns a HookFunc that converts integer to bool.
+func intToBoolHookFunc() HookFunc {
+	return func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
+		if to.Kind() != reflect.Bool {
+			return data, nil
+		}
+
+		// We handle various integer types.
+		switch from.Kind() {
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			// For signed integers
+			val := reflect.ValueOf(data).Int()
+			return val != 0, nil
+		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			// For unsigned integers
+			val := reflect.ValueOf(data).Uint()
+			return val != 0, nil
+		}
+
+		return data, nil
+	}
+}
