@@ -6,6 +6,9 @@ import (
 	"github.com/graingo/mconv/internal"
 )
 
+// HookFunc is an alias of complex.HookFunc.
+type HookFunc = complex.HookFunc
+
 var (
 	// ToString convert any type to string.
 	ToString = basic.ToString
