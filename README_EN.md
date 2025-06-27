@@ -43,7 +43,7 @@ m := mconv.ToMap(map[string]int{"a": 1}) // map[string]interface{}{"a": 1}
 jsonStr := mconv.ToJSON(map[string]interface{}{"name": "John"}) // {"name":"John"}
 personMap := mconv.ToMapFromJSON(`{"name":"Jane"}`) // map[string]interface{}{"name": "Jane"}
 
-// Struct conversion is now more powerful, see the dedicated section below.
+// Struct conversion
 ```
 
 ### Advanced Struct Conversion
