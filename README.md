@@ -43,7 +43,6 @@ m := mconv.ToMap(map[string]int{"a": 1}) // map[string]interface{}{"a": 1}
 jsonStr := mconv.ToJSON(map[string]interface{}{"name": "John"}) // {"name":"John"}
 personMap := mconv.ToMapFromJSON(`{"name":"Jane"}`) // map[string]interface{}{"name": "Jane"}
 
-// Struct 转换功能
 ```
 
 ### 高级结构体转换
@@ -81,7 +80,7 @@ func main() {
 	}
 
 	var user User
-	err := complex.StructE(source, &user)
+	err := complex.ToStructE(source, &user)
 	if err != nil {
 		panic(err)
 	}
@@ -132,7 +131,7 @@ func main() {
 	}
 
 	var post Post
-	err := complex.StructE(source, &post, intStatusToStringHook)
+	err := complex.ToStructE(source, &post, intStatusToStringHook)
 	if err != nil {
 		panic(err)
 	}

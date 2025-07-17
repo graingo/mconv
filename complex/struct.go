@@ -286,6 +286,13 @@ func buildDecoderFields(t reflect.Type, indexPrefix []int, decoder *internal.Dec
 
 		// Parse the tag.
 		tag := field.Tag.Get("mconv")
+		if tag == "" {
+			tag = field.Tag.Get("json")
+		}
+		if tag == "" {
+			tag = field.Tag.Get("yaml")
+		}
+
 		if tag == "-" {
 			continue
 		}

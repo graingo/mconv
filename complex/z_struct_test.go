@@ -53,6 +53,13 @@ type TestDuration struct {
 	Duration time.Duration `mconv:"duration"`
 }
 
+type UserWithAllTags struct {
+	ID       int    `mconv:"mconv_id" json:"json_id" yaml:"yaml_id"`
+	Name     string `json:"json_name" yaml:"yaml_name"`
+	Address  string `yaml:"yaml_address"`
+	Untagged string
+}
+
 func TestStruct(t *testing.T) {
 	t.Run("SimpleConversion", func(t *testing.T) {
 		source := map[string]interface{}{"ID": 1, "Name": "Alice"}
@@ -244,6 +251,59 @@ func TestStruct(t *testing.T) {
 		}
 		if !reflect.DeepEqual(target, expected) {
 			t.Errorf("expected %+v, got %+v", expected, target)
+		}
+	})
+
+	t.Run("TagPriority", func(t *testing.T) {
+		source := map[string]interface{}{
+			"mconv_id":     1,
+			"json_name":    "From JSON",
+			"yaml_address": "From YAML",
+			"Untagged":     "No tag",
+		}
+		var target UserWithAllTags
+		err := complex.ToStructE(source, &target)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		expected := UserWithAllTags{
+			ID:       1,
+			Name:     "From JSON",
+			Address:  "From YAML",
+			Untagged: "No tag",
+		}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
+		}
+
+		// Test json overriding yaml
+		source = map[string]interface{}{
+			"yaml_name": "From YAML",
+			"json_name": "From JSON",
+		}
+		var target2 UserWithAllTags
+		err = complex.ToStructE(source, &target2)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if target2.Name != "From JSON" {
+			t.Errorf("expected Name to be 'From JSON', but got '%s'", target2.Name)
+		}
+
+		// Test mconv overriding json and yaml
+		source = map[string]interface{}{
+			"mconv_id": 99,
+			"json_id":  -1,
+			"yaml_id":  -2,
+		}
+		var target3 UserWithAllTags
+		err = complex.ToStructE(source, &target3)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if target3.ID != 99 {
+			t.Errorf("expected ID to be 99, but got %d", target3.ID)
 		}
 	})
 
