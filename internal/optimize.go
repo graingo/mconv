@@ -129,6 +129,9 @@ func ClearStringCache() {
 // Set string cache size
 func SetStringCacheSize(size int) {
 	if size <= 0 {
+		stringCacheSize = 0
+		stringCache = sync.Map{}
+		stringCacheLen = 0
 		return
 	}
 
@@ -181,14 +184,16 @@ func ClearTimeCache() {
 
 // Set time cache size
 func SetTimeCacheSize(size int) {
-	if size <= 0 {
+	if size < 0 {
 		return
 	}
 
 	timeCacheLock.Lock()
+	if size == 0 {
+		timeCache = sync.Map{}
+		timeCacheLen = 0
+	}
 	timeCacheSize = size
-	timeCache = sync.Map{}
-	timeCacheLen = 0
 	timeCacheLock.Unlock()
 }
 
@@ -202,6 +207,9 @@ func ClearAllCaches() {
 
 // AddStringToCache adds string to cache.
 func AddStringToCache(value interface{}, result string) {
+	if stringCacheSize == 0 {
+		return
+	}
 	// Only cache basic types to avoid memory leaks
 	switch value.(type) {
 	case string, int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float64, float32, bool:
@@ -229,6 +237,9 @@ func AddStringToCache(value interface{}, result string) {
 
 // GetStringFromCache gets string from cache.
 func GetStringFromCache(value interface{}) (string, bool) {
+	if stringCacheSize == 0 {
+		return "", false
+	}
 	// Only get basic types from cache
 	switch value.(type) {
 	case string, int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float64, float32, bool:
@@ -250,6 +261,9 @@ func GetStringFromCache(value interface{}) (string, bool) {
 
 // AddTimeToCache adds time to cache.
 func AddTimeToCache(value interface{}, result time.Time) {
+	if timeCacheSize == 0 {
+		return
+	}
 	// Only cache basic types to avoid memory leaks
 	switch value.(type) {
 	case string, int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float64, float32:
@@ -277,6 +291,9 @@ func AddTimeToCache(value interface{}, result time.Time) {
 
 // GetTimeFromCache gets time from cache.
 func GetTimeFromCache(value interface{}) (time.Time, bool) {
+	if timeCacheSize == 0 {
+		return time.Time{}, false
+	}
 	// Only get basic types from cache
 	switch value.(type) {
 	case string, int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float64, float32:
