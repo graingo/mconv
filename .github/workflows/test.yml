@@ -24,3 +24,8 @@ jobs:
 
       - name: Display coverage summary
         run: go tool cover -func=coverage.out
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
