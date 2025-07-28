@@ -40,6 +40,7 @@ func TestToUint(t *testing.T) {
 		{int64(-123), uint(0), true},
 		{float64(-123.45), uint(0), true},
 		{complex(123.45, 1), uint(0), true},
+		{complex(123.45, 1), uint(0), true},
 		{"abc", uint(0), true},
 		{struct{}{}, uint(0), true},
 	}
@@ -101,6 +102,7 @@ func TestToUint64(t *testing.T) {
 		{int(-123), uint64(0), true},
 		{int64(-123), uint64(0), true},
 		{float64(-123.45), uint64(0), true},
+		{complex(123.45, 1), uint64(0), true},
 		{complex(123.45, 1), uint64(0), true},
 		{"abc", uint64(0), true},
 		{struct{}{}, uint64(0), true},
@@ -165,6 +167,7 @@ func TestToUint32(t *testing.T) {
 		{int64(-123), uint32(0), true},
 		{float64(-123.45), uint32(0), true},
 		{complex(123.45, 1), uint32(0), true},
+		{complex(123.45, 1), uint32(0), true},
 		{"abc", uint32(0), true},
 		{struct{}{}, uint32(0), true},
 	}
@@ -228,6 +231,7 @@ func TestToUint16(t *testing.T) {
 		{int64(-123), uint16(0), true},
 		{float64(-123.45), uint16(0), true},
 		{complex(123.45, 1), uint16(0), true},
+		{complex(123.45, 1), uint16(0), true},
 		{"abc", uint16(0), true},
 		{struct{}{}, uint16(0), true},
 	}
@@ -290,6 +294,7 @@ func TestToUint8(t *testing.T) {
 		{int(-123), uint8(0), true},
 		{int64(-123), uint8(0), true},
 		{float64(-123.45), uint8(0), true},
+		{complex(123.45, 1), uint8(0), true},
 		{complex(123.45, 1), uint8(0), true},
 		{"abc", uint8(0), true},
 		{struct{}{}, uint8(0), true},

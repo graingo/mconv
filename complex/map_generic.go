@@ -45,60 +45,50 @@ func ToMapTE[K comparable, V any](value interface{}) (map[K]V, error) {
 		return nil, nil
 	}
 
-	// Check if value is already a map[K]V
 	if v, ok := value.(map[K]V); ok {
 		return v, nil
 	}
 
-	// Convert to map[string]interface{} first
 	m, err := ToMapE(value)
 	if err != nil {
 		return nil, internal.NewConversionError(value, "map[K]V", err)
 	}
 
-	// Get target key and value types
 	kt := reflect.TypeOf((*K)(nil)).Elem()
 	vt := reflect.TypeOf((*V)(nil)).Elem()
 
-	// Create result map
 	result := make(map[K]V)
 
-	// Convert each key-value pair
 	for k, v := range m {
-		// Convert key
 		var keyConverted K
+		keyRv := reflect.ValueOf(k)
+
 		var keyErr error
-
-		// Get key reflection value
-		kValue := reflect.ValueOf(k)
-		// Get cached type information to avoid repeated reflection operations
-		kTypeInfo := internal.GetTypeInfo(kValue.Type())
-
-		// Handle common key types
-		switch any(keyConverted).(type) {
-		case string:
-			// If K is string, we already have string keys
-			if kt == reflect.TypeOf("") {
-				// Use cached assignability check for better performance
-				if !kTypeInfo.IsAssignableTo(kt) {
-					keyErr = internal.NewConversionError(k, "K", internal.ErrConversionFailed)
+		if keyRv.Type().ConvertibleTo(kt) {
+			keyConverted = keyRv.Convert(kt).Interface().(K)
+		} else {
+			// try to convert via basic types
+			switch kt.Kind() {
+			case reflect.String:
+				keyConverted = any(basic.ToString(k)).(K)
+			case reflect.Int:
+				i, err := basic.ToIntE(k)
+				if err != nil {
+					keyErr = err
+				} else {
+					keyConverted = any(i).(K)
 				}
-			}
-		case int:
-			intKey, e := basic.ToIntE(k)
-			if e != nil {
-				keyErr = internal.NewConversionError(k, "K", e)
-			} else {
-				keyConverted = any(intKey).(K)
-			}
-		default:
-			// For other types, try direct conversion using cached convertibility check
-			// This avoids repeated calls to ConvertibleTo which is expensive
-			if !kTypeInfo.IsConvertibleTo(kt) {
+			case reflect.Int64:
+				i, err := basic.ToInt64E(k)
+				if err != nil {
+					keyErr = err
+				} else {
+					keyConverted = any(i).(K)
+				}
+			default:
 				keyErr = internal.NewConversionError(k, "K", internal.ErrConversionFailed)
 			}
 		}
-
 		if keyErr != nil {
 			return nil, keyErr
 		}
@@ -106,68 +96,54 @@ func ToMapTE[K comparable, V any](value interface{}) (map[K]V, error) {
 		// Convert value
 		var valueConverted V
 		var valueErr error
-
-		// Get value reflection value
-		vValue := reflect.ValueOf(v)
-		// Get cached type information to avoid repeated reflection operations
-		vTypeInfo := internal.GetTypeInfo(vValue.Type())
-
-		// Handle common value types
-		switch any(valueConverted).(type) {
-		case string:
-			strVal, e := basic.ToStringE(v)
-			if e != nil {
-				valueErr = internal.NewConversionError(v, "V", e)
-			} else {
-				valueConverted = any(strVal).(V)
-			}
-		case int:
-			intVal, e := basic.ToIntE(v)
-			if e != nil {
-				valueErr = internal.NewConversionError(v, "V", e)
-			} else {
-				valueConverted = any(intVal).(V)
-			}
-		case int64:
-			int64Val, e := basic.ToInt64E(v)
-			if e != nil {
-				valueErr = internal.NewConversionError(v, "V", e)
-			} else {
-				valueConverted = any(int64Val).(V)
-			}
-		case float64:
-			floatVal, e := basic.ToFloat64E(v)
-			if e != nil {
-				valueErr = internal.NewConversionError(v, "V", e)
-			} else {
-				valueConverted = any(floatVal).(V)
-			}
-		case bool:
-			boolVal, e := basic.ToBoolE(v)
-			if e != nil {
-				valueErr = internal.NewConversionError(v, "V", e)
-			} else {
-				valueConverted = any(boolVal).(V)
-			}
-		default:
-			// For other types, try direct conversion using cached type information
-			// Use cached assignability and convertibility checks for better performance
-			if vTypeInfo.IsAssignableTo(vt) {
-				valueConverted = v.(V)
-			} else if vTypeInfo.IsConvertibleTo(vt) {
-				// Try to convert using reflection
-				converted := vValue.Convert(vt)
-				valueConverted = converted.Interface().(V)
-			} else {
+		if v == nil {
+			result[keyConverted] = valueConverted
+			continue
+		}
+		valueRv := reflect.ValueOf(v)
+		if valueRv.Type().ConvertibleTo(vt) {
+			valueConverted = valueRv.Convert(vt).Interface().(V)
+		} else {
+			// try to convert via basic types
+			switch vt.Kind() {
+			case reflect.String:
+				valueConverted = any(basic.ToString(v)).(V)
+			case reflect.Int:
+				i, err := basic.ToIntE(v)
+				if err != nil {
+					valueErr = err
+				} else {
+					valueConverted = any(i).(V)
+				}
+			case reflect.Int64:
+				i, err := basic.ToInt64E(v)
+				if err != nil {
+					valueErr = err
+				} else {
+					valueConverted = any(i).(V)
+				}
+			case reflect.Float64:
+				f, err := basic.ToFloat64E(v)
+				if err != nil {
+					valueErr = err
+				} else {
+					valueConverted = any(f).(V)
+				}
+			case reflect.Bool:
+				b, err := basic.ToBoolE(v)
+				if err != nil {
+					valueErr = err
+				} else {
+					valueConverted = any(b).(V)
+				}
+			default:
 				valueErr = internal.NewConversionError(v, "V", internal.ErrConversionFailed)
 			}
 		}
-
 		if valueErr != nil {
 			return nil, valueErr
 		}
 
-		// Add to result map
 		result[keyConverted] = valueConverted
 	}
 

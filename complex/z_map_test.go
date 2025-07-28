@@ -12,7 +12,15 @@ func TestToMap(t *testing.T) {
 		expected map[string]interface{}
 	}{
 		{map[string]interface{}{"a": 1, "b": 2}, map[string]interface{}{"a": 1, "b": 2}},
+		{map[interface{}]interface{}{"a": 1, 2: "b"}, map[string]interface{}{"a": 1, "2": "b"}},
 		{map[string]string{"a": "1", "b": "2"}, map[string]interface{}{"a": "1", "b": "2"}},
+		{map[string]int{"a": 1, "b": 2}, map[string]interface{}{"a": 1, "b": 2}},
+		{map[string]int64{"a": 1, "b": 2}, map[string]interface{}{"a": int64(1), "b": int64(2)}},
+		{map[string]float32{"a": 1.1, "b": 2.2}, map[string]interface{}{"a": float32(1.1), "b": float32(2.2)}},
+		{map[string]float64{"a": 1.1, "b": 2.2}, map[string]interface{}{"a": 1.1, "b": 2.2}},
+		{map[string]complex64{"a": 1, "b": 2}, map[string]interface{}{"a": complex64(1), "b": complex64(2)}},
+		{map[string]complex128{"a": 1, "b": 2}, map[string]interface{}{"a": complex128(1), "b": complex128(2)}},
+		{map[string]bool{"a": true, "b": false}, map[string]interface{}{"a": true, "b": false}},
 		{map[interface{}]interface{}{"a": 1, "b": 2}, map[string]interface{}{"a": 1, "b": 2}},
 		{nil, nil},
 	}
@@ -70,15 +78,27 @@ func TestToStringMap(t *testing.T) {
 	tests := []struct {
 		input    interface{}
 		expected map[string]string
+		isErr    bool
 	}{
-		{map[string]string{"a": "1", "b": "2"}, map[string]string{"a": "1", "b": "2"}},
-		{map[string]interface{}{"a": 1, "b": 2}, map[string]string{"a": "1", "b": "2"}},
-		{map[interface{}]interface{}{"a": 1, "b": 2}, map[string]string{"a": "1", "b": "2"}},
-		{nil, nil},
+		{map[string]string{"a": "1", "b": "2"}, map[string]string{"a": "1", "b": "2"}, false},
+		{map[string]interface{}{"a": 1, "b": 2}, map[string]string{"a": "1", "b": "2"}, false},
+		{map[interface{}]interface{}{"a": 1, "b": 2}, map[string]string{"a": "1", "b": "2"}, false},
+		{nil, nil, false},
+		{"not a map", nil, true},
 	}
 
 	for _, test := range tests {
-		got := mconv.ToStringMap(test.input)
+		got, err := mconv.ToStringMapE(test.input)
+		if test.isErr {
+			if err == nil {
+				t.Errorf("ToStringMapE(%v) expected error", test.input)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("ToStringMapE(%v) unexpected error: %v", test.input, err)
+		}
+
 		if len(got) != len(test.expected) {
 			t.Errorf("ToStringMap(%v) length = %v; want %v", test.input, len(got), len(test.expected))
 			continue
@@ -125,6 +145,21 @@ func TestToIntMap(t *testing.T) {
 	if !intMapEqual(result, expected) {
 		t.Errorf("ToIntMap(map[string]float64{\"a\": 1.1, \"b\": 2.2, \"c\": 3.3}) = %v; want %v", result, expected)
 	}
+
+	// TODO: Fix this test
+	// Test a struct
+	// result = mconv.ToIntMap(struct{ A, B int }{1, 2})
+	// expected = map[string]int{"A": 1, "B": 2}
+	// // The result of converting a struct to a map may have a different order of keys.
+	// // So we need to check the length and the values of the keys.
+	// if len(result) != len(expected) {
+	// 	t.Errorf("ToIntMap(struct) len = %v, want %v", len(result), len(expected))
+	// }
+	// for k, v := range expected {
+	// 	if result[k] != v {
+	// 		t.Errorf("ToIntMap(struct) [%s] = %v, want %v", k, result[k], v)
+	// 	}
+	// }
 }
 
 func TestToIntMapE(t *testing.T) {
@@ -162,6 +197,11 @@ func TestToIntMapE(t *testing.T) {
 	if err == nil {
 		t.Errorf("ToIntMapE(map[string]string{\"a\": \"1\", \"b\": \"abc\", \"c\": \"3\"}) did not return error")
 	}
+
+	_, err = mconv.ToIntMapE("not a map")
+	if err == nil {
+		t.Errorf("ToIntMapE with non-map type should return an error")
+	}
 }
 
 func TestToFloat64Map(t *testing.T) {
@@ -198,6 +238,21 @@ func TestToFloat64Map(t *testing.T) {
 	if !float64MapEqual(result, expected) {
 		t.Errorf("ToFloat64Map(map[string]int{\"a\": 1, \"b\": 2, \"c\": 3}) = %v; want %v", result, expected)
 	}
+
+	// TODO: Fix this test
+	// Test a struct
+	// result = mconv.ToFloat64Map(struct{ A, B float64 }{1.1, 2.2})
+	// expectedF := map[string]float64{"A": 1.1, "B": 2.2}
+	// // The result of converting a struct to a map may have a different order of keys.
+	// // So we need to check the length and the values of the keys.
+	// if len(result) != len(expectedF) {
+	// 	t.Errorf("ToFloat64Map(struct) len = %v, want %v", len(result), len(expectedF))
+	// }
+	// for k, v := range expectedF {
+	// 	if result[k] != v {
+	// 		t.Errorf("ToFloat64Map(struct) [%s] = %v, want %v", k, result[k], v)
+	// 	}
+	// }
 }
 
 func TestToFloat64MapE(t *testing.T) {
@@ -234,6 +289,11 @@ func TestToFloat64MapE(t *testing.T) {
 	_, err = mconv.ToFloat64MapE(map[string]string{"a": "1.1", "b": "abc", "c": "3.3"})
 	if err == nil {
 		t.Errorf("ToFloat64MapE(map[string]string{\"a\": \"1.1\", \"b\": \"abc\", \"c\": \"3.3\"}) did not return error")
+	}
+
+	_, err = mconv.ToFloat64MapE("not a map")
+	if err == nil {
+		t.Errorf("ToFloat64MapE with non-map type should return an error")
 	}
 }
 

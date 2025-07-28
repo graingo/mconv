@@ -1,6 +1,7 @@
 package basic_test
 
 import (
+	"math"
 	"testing"
 
 	"github.com/graingo/mconv"
@@ -12,6 +13,8 @@ func TestToInt(t *testing.T) {
 		expected int
 	}{
 		{123, 123},
+		{int64(123), 123},
+		{int32(123), 123},
 		{123.45, 123},
 		{"123", 123},
 		{true, 1},
@@ -33,12 +36,28 @@ func TestToIntE(t *testing.T) {
 		isErr    bool
 	}{
 		{123, 123, false},
+		{int64(123), 123, false},
+		{int32(123), 123, false},
+		{int16(123), 123, false},
+		{int8(123), 123, false},
+		{uint(123), 123, false},
+		{uint64(123), 123, false},
+		{uint32(123), 123, false},
+		{uint16(123), 123, false},
+		{uint8(123), 123, false},
 		{123.45, 123, false},
+		{float32(123.45), 123, false},
+		{complex(123, 0), 123, false},
+		{complex(123, 1), 0, true},
+		{complex64(complex(123, 0)), 123, false},
 		{"123", 123, false},
 		{"abc", 0, true},
 		{true, 1, false},
 		{false, 0, false},
 		{nil, 0, false},
+		{uint64(^uint(0)), 0, true},       // overflow
+		{uint64(math.MaxUint64), 0, true}, // overflow on 32-bit
+		{struct{}{}, 0, true},
 	}
 
 	for _, test := range tests {
@@ -62,6 +81,7 @@ func TestToInt64(t *testing.T) {
 	}{
 		{int64(123), int64(123)},
 		{123, int64(123)},
+		{uint(123), int64(123)},
 		{123.45, int64(123)},
 		{"123", int64(123)},
 		{true, int64(1)},
@@ -84,12 +104,18 @@ func TestToInt64E(t *testing.T) {
 	}{
 		{int64(123), int64(123), false},
 		{123, int64(123), false},
+		{uint64(math.MaxInt64 + 1), 0, true},
 		{123.45, int64(123), false},
+		{float32(123.45), int64(123), false},
+		{complex(123, 0), 123, false},
+		{complex(123, 1), 0, true},
+		{complex64(complex(123, 0)), 123, false},
 		{"123", int64(123), false},
 		{"abc", int64(0), true},
 		{true, int64(1), false},
 		{false, int64(0), false},
 		{nil, int64(0), false},
+		{struct{}{}, 0, true},
 	}
 
 	for _, test := range tests {
@@ -113,6 +139,13 @@ func TestToInt32E(t *testing.T) {
 		isErr    bool
 	}{
 		{int32(123), int32(123), false},
+		{int64(math.MaxInt32 + 1), 0, true},
+		{uint(math.MaxInt32 + 1), 0, true},
+		{uint64(math.MaxInt32 + 1), 0, true},
+		{uint32(math.MaxInt32 + 1), 0, true},
+		{complex(123, 0), 123, false},
+		{complex(123, 1), 0, true},
+		{complex64(complex(123, 0)), 123, false},
 		{123, int32(123), false},
 		{123.45, int32(123), false},
 		{"123", int32(123), false},
@@ -120,6 +153,7 @@ func TestToInt32E(t *testing.T) {
 		{true, int32(1), false},
 		{false, int32(0), false},
 		{nil, int32(0), false},
+		{struct{}{}, 0, true},
 	}
 
 	for _, test := range tests {
@@ -143,6 +177,14 @@ func TestToInt16E(t *testing.T) {
 		isErr    bool
 	}{
 		{int16(123), int16(123), false},
+		{int64(math.MaxInt16 + 1), 0, true},
+		{uint(math.MaxInt16 + 1), 0, true},
+		{uint64(math.MaxInt16 + 1), 0, true},
+		{uint32(math.MaxInt16 + 1), 0, true},
+		{uint16(math.MaxInt16 + 1), 0, true},
+		{complex(123, 0), 123, false},
+		{complex(123, 1), 0, true},
+		{complex64(complex(123, 0)), 123, false},
 		{123, int16(123), false},
 		{123.45, int16(123), false},
 		{"123", int16(123), false},
@@ -150,6 +192,7 @@ func TestToInt16E(t *testing.T) {
 		{true, int16(1), false},
 		{false, int16(0), false},
 		{nil, int16(0), false},
+		{struct{}{}, 0, true},
 	}
 
 	for _, test := range tests {
@@ -173,6 +216,15 @@ func TestToInt8E(t *testing.T) {
 		isErr    bool
 	}{
 		{int8(123), int8(123), false},
+		{int64(math.MaxInt8 + 1), 0, true},
+		{uint(math.MaxInt8 + 1), 0, true},
+		{uint64(math.MaxInt8 + 1), 0, true},
+		{uint32(math.MaxInt8 + 1), 0, true},
+		{uint16(math.MaxInt8 + 1), 0, true},
+		{uint8(math.MaxInt8 + 1), 0, true},
+		{complex(123, 0), 123, false},
+		{complex(123, 1), 0, true},
+		{complex64(complex(123, 0)), 123, false},
 		{123, int8(123), false},
 		{123.45, int8(123), false},
 		{"123", int8(123), false},
@@ -180,6 +232,7 @@ func TestToInt8E(t *testing.T) {
 		{true, int8(1), false},
 		{false, int8(0), false},
 		{nil, int8(0), false},
+		{struct{}{}, 0, true},
 	}
 
 	for _, test := range tests {

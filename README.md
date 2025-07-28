@@ -1,5 +1,11 @@
 # mconv
 
+[![Go Report Card](https://goreportcard.com/badge/github.com/graingo/mconv)](https://goreportcard.com/report/github.com/graingo/mconv)
+[![codecov](https://codecov.io/github/graingo/mconv/branch/master/graph/badge.svg?token=WmK3x7HV4k)](https://codecov.io/github/graingo/mconv)
+[![Go Reference](https://pkg.go.dev/badge/github.com/graingo/mconv.svg)](https://pkg.go.dev/github.com/graingo/mconv)
+[![License](https://img.shields.io/github/license/graingo/mconv.svg)](https://github.com/graingo/mconv/blob/master/LICENSE)
+[![Release](https://img.shields.io/github/v/release/graingo/mconv.svg)](https://github.com/graingo/mconv/releases)
+
 [中文](README.md) | [English](README_EN.md)
 
 一个轻量级的高性能 Go 类型转换库。

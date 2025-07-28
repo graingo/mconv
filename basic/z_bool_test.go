@@ -18,6 +18,9 @@ func TestToBool(t *testing.T) {
 		{"true", true},
 		{"false", false},
 		{nil, false},
+		{1.1, true},
+		{0.0, false},
+		{complex(1, 0), true},
 	}
 
 	for _, test := range tests {
@@ -35,6 +38,11 @@ func TestToBoolE(t *testing.T) {
 	}{
 		{true, true, false},
 		{false, false, false},
+		{int64(1), true, false},
+		{int32(0), false, false},
+		{uint(1), true, false},
+		{float64(0.0), false, false},
+		{complex128(complex(1, 1)), true, false},
 		{1, true, false},
 		{0, false, false},
 		{"true", true, false},
@@ -43,6 +51,7 @@ func TestToBoolE(t *testing.T) {
 		{"no", false, false},
 		{"invalid", false, true},
 		{nil, false, false},
+		{struct{}{}, false, true},
 	}
 
 	for _, test := range tests {

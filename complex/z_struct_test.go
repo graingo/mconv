@@ -60,6 +60,24 @@ type UserWithAllTags struct {
 	Untagged string
 }
 
+type UserWithSliceAndMap struct {
+	ID      int
+	Hobbies []string
+	Attrs   map[string]string
+}
+
+type ComplexUser struct {
+	ID        *int
+	Name      string
+	IsActive  bool
+	Scores    []float64
+	Tags      map[string]string
+	Sub       *SimpleUser
+	Friends   []*SimpleUser
+	Params    map[string]interface{}
+	BirthTime *time.Time
+}
+
 func TestStruct(t *testing.T) {
 	t.Run("SimpleConversion", func(t *testing.T) {
 		source := map[string]interface{}{"ID": 1, "Name": "Alice"}
@@ -254,6 +272,85 @@ func TestStruct(t *testing.T) {
 		}
 	})
 
+	t.Run("SliceAndMap", func(t *testing.T) {
+		source := map[string]interface{}{
+			"ID":      9,
+			"Hobbies": []interface{}{"reading", "coding"},
+			"Attrs":   map[string]interface{}{"level": "5", "exp": "1000"},
+		}
+		var target UserWithSliceAndMap
+		err := complex.ToStructE(source, &target)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		expected := UserWithSliceAndMap{
+			ID:      9,
+			Hobbies: []string{"reading", "coding"},
+			Attrs:   map[string]string{"level": "5", "exp": "1000"},
+		}
+		if !reflect.DeepEqual(target, expected) {
+			t.Errorf("expected %+v, got %+v", expected, target)
+		}
+	})
+
+	t.Run("ComplexConversion", func(t *testing.T) {
+		id := 123
+		now := time.Now()
+		source := map[string]interface{}{
+			"ID":        "123",
+			"Name":      "Bob",
+			"IsActive":  "true",
+			"Scores":    []string{"99.5", "88"},
+			"Tags":      map[string]interface{}{"a": "1", "b": "2"},
+			"Sub":       map[string]interface{}{"ID": 456, "Name": "SubBob"},
+			"Friends":   []map[string]interface{}{{"ID": 789, "Name": "Friend1"}},
+			"Params":    map[string]interface{}{"p1": "v1"},
+			"BirthTime": now.Format(time.RFC3339),
+		}
+		target := ComplexUser{}
+		err := complex.ToStructE(source, &target)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+
+		expected := ComplexUser{
+			ID:        &id,
+			Name:      "Bob",
+			IsActive:  true,
+			Scores:    []float64{99.5, 88.0},
+			Tags:      map[string]string{"a": "1", "b": "2"},
+			Sub:       &SimpleUser{ID: 456, Name: "SubBob"},
+			Friends:   []*SimpleUser{{ID: 789, Name: "Friend1"}},
+			Params:    map[string]interface{}{"p1": "v1"},
+			BirthTime: &now,
+		}
+
+		if *target.ID != *expected.ID {
+			t.Errorf("ID: expected %d, got %d", *expected.ID, *target.ID)
+		}
+		if target.Name != expected.Name {
+			t.Errorf("Name: expected %s, got %s", expected.Name, target.Name)
+		}
+		if !reflect.DeepEqual(target.Scores, expected.Scores) {
+			t.Errorf("Scores: expected %v, got %v", expected.Scores, target.Scores)
+		}
+		if !reflect.DeepEqual(target.Tags, expected.Tags) {
+			t.Errorf("Tags: expected %v, got %v", expected.Tags, target.Tags)
+		}
+		if !reflect.DeepEqual(target.Sub, expected.Sub) {
+			t.Errorf("Sub: expected %v, got %v", expected.Sub, target.Sub)
+		}
+		if !reflect.DeepEqual(target.Friends, expected.Friends) {
+			t.Errorf("Friends: expected %v, got %v", expected.Friends, target.Friends)
+		}
+		if !reflect.DeepEqual(target.Params, expected.Params) {
+			t.Errorf("Params: expected %v, got %v", expected.Params, target.Params)
+		}
+		if !target.BirthTime.Truncate(time.Second).Equal(expected.BirthTime.Truncate(time.Second)) {
+			t.Errorf("BirthTime: expected %v, got %v", *expected.BirthTime, *target.BirthTime)
+		}
+	})
+
 	t.Run("TagPriority", func(t *testing.T) {
 		source := map[string]interface{}{
 			"mconv_id":     1,
@@ -307,4 +404,32 @@ func TestStruct(t *testing.T) {
 		}
 	})
 
+	t.Run("ErrorCases", func(t *testing.T) {
+		// Non-pointer destination
+		var target SimpleUser
+		err := complex.ToStructE(map[string]interface{}{"ID": 1}, target)
+		if err == nil {
+			t.Error("expected error for non-pointer destination")
+		}
+
+		// Pointer to non-struct
+		var i int
+		err = complex.ToStructE(map[string]interface{}{"ID": 1}, &i)
+		if err == nil {
+			t.Error("expected error for pointer to non-struct destination")
+		}
+
+		// Bad source data
+		err = complex.ToStructE("not a map", &target)
+		if err == nil {
+			t.Error("expected error for non-map source")
+		}
+
+		// Field conversion error
+		source := map[string]interface{}{"ID": "not-an-int"}
+		err = complex.ToStructE(source, &target)
+		if err == nil {
+			t.Error("expected error for field conversion failure")
+		}
+	})
 }

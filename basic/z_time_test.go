@@ -26,6 +26,25 @@ func TestToTime(t *testing.T) {
 	}
 }
 
+func TestToTime_WithFormat(t *testing.T) {
+	tests := []struct {
+		input    string
+		format   string
+		expected time.Time
+	}{
+		{"2024-05-20", "2006-01-02", time.Date(2024, 5, 20, 0, 0, 0, 0, time.UTC)},
+		{"20/05/2024", "02/01/2006", time.Date(2024, 5, 20, 0, 0, 0, 0, time.UTC)},
+	}
+
+	for _, test := range tests {
+		loc, _ := time.LoadLocation("UTC")
+		got := mconv.ToTime(test.input, test.format).In(loc)
+		if !got.Equal(test.expected) {
+			t.Errorf("mconv.ToTime(%q, %q) = %v; want %v", test.input, test.format, got, test.expected)
+		}
+	}
+}
+
 func TestToTimeE(t *testing.T) {
 	now := time.Now()
 	rfc3339 := now.Format(time.RFC3339)
@@ -36,20 +55,42 @@ func TestToTimeE(t *testing.T) {
 	}{
 		{now, now, false},
 		{now.Unix(), time.Unix(now.Unix(), 0), false},
+		{int32(now.Unix()), time.Unix(now.Unix(), 0), false},
+		{uint(now.Unix()), time.Unix(now.Unix(), 0), false},
+		{uint32(now.Unix()), time.Unix(now.Unix(), 0), false},
+		{uint64(now.Unix()), time.Unix(now.Unix(), 0), false},
 		{rfc3339, now.Truncate(time.Second), false},
 		{"invalid", time.Time{}, true},
 		{nil, time.Time{}, false},
+		{struct{}{}, time.Time{}, true},
+		{"2006-01-02 15:04:05", time.Date(2006, 1, 2, 15, 4, 5, 0, time.UTC), false},
+		{"2006-01-02T15:04:05", time.Date(2006, 1, 2, 15, 4, 5, 0, time.UTC), false},
+		{"2006-01-02 15:04", time.Date(2006, 1, 2, 15, 4, 0, 0, time.UTC), false},
+		{"2006-01-02", time.Date(2006, 1, 2, 0, 0, 0, 0, time.UTC), false},
+		{"01/02/2006", time.Date(2006, 1, 2, 0, 0, 0, 0, time.UTC), false},
+		{"01/02/2006 15:04:05", time.Date(2006, 1, 2, 15, 4, 5, 0, time.UTC), false},
+		{"01/02/2006 15:04", time.Date(2006, 1, 2, 15, 4, 0, 0, time.UTC), false},
+		{"2006/01/02", time.Date(2006, 1, 2, 0, 0, 0, 0, time.UTC), false},
+		{"2006/01/02 15:04:05", time.Date(2006, 1, 2, 15, 4, 5, 0, time.UTC), false},
+		{"2006/01/02 15:04", time.Date(2006, 1, 2, 15, 4, 0, 0, time.UTC), false},
+		{"invalid format", time.Time{}, true},
 	}
 
 	for _, test := range tests {
 		got, err := mconv.ToTimeE(test.input)
 		if test.isErr && err == nil {
-			t.Errorf("mconv.ToTimeE(%v) expected error", test.input)
+			t.Errorf("mconv.ToTimeE(%v) expected error, but got nil", test.input)
 		}
 		if !test.isErr && err != nil {
 			t.Errorf("mconv.ToTimeE(%v) unexpected error: %v", test.input, err)
 		}
-		if !test.isErr && !got.Equal(test.expected) {
+		if !got.Equal(test.expected) {
+			// For string time, parse result is in UTC if no timezone is specified
+			if _, ok := test.input.(string); ok && !test.isErr {
+				if got.UTC().Equal(test.expected) {
+					continue
+				}
+			}
 			t.Errorf("mconv.ToTimeE(%v) = %v; want %v", test.input, got, test.expected)
 		}
 	}
@@ -97,6 +138,10 @@ func TestToDuration(t *testing.T) {
 		},
 		{
 			input: float64(1e9), // 1 billion nanoseconds = 1 second
+			want:  time.Second,
+		},
+		{
+			input: float32(1e9),
 			want:  time.Second,
 		},
 
@@ -170,6 +215,16 @@ func TestToDurationE(t *testing.T) {
 			wantErr: false,
 		},
 		{
+			input:   int32(3600),
+			want:    3600 * time.Nanosecond,
+			wantErr: false,
+		},
+		{
+			input:   uint(3600),
+			want:    3600 * time.Nanosecond,
+			wantErr: false,
+		},
+		{
 			input:   3600, // 3600 nanoseconds
 			want:    3600 * time.Nanosecond,
 			wantErr: false,
@@ -177,6 +232,16 @@ func TestToDurationE(t *testing.T) {
 		{
 			input:   float64(1e9), // 1 billion nanoseconds = 1 second
 			want:    time.Second,
+			wantErr: false,
+		},
+		{
+			input:   "1.5h", // from string
+			want:    time.Hour + 30*time.Minute,
+			wantErr: false,
+		},
+		{
+			input:   "1.5",
+			want:    time.Duration(1),
 			wantErr: false,
 		},
 
@@ -195,6 +260,11 @@ func TestToDurationE(t *testing.T) {
 		// Error cases
 		{
 			input:   "invalid",
+			want:    0,
+			wantErr: true,
+		},
+		{
+			input:   struct{}{},
 			want:    0,
 			wantErr: true,
 		},

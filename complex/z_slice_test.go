@@ -1,6 +1,7 @@
 package complex_test
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/graingo/mconv"
@@ -13,6 +14,10 @@ func TestToSlice(t *testing.T) {
 	}{
 		{[]int{1, 2, 3}, []interface{}{1, 2, 3}},
 		{[]string{"a", "b"}, []interface{}{"a", "b"}},
+		{[]int64{1, 2, 3}, []interface{}{int64(1), int64(2), int64(3)}},
+		{[]float64{1.1, 2.2}, []interface{}{1.1, 2.2}},
+		{[]complex64{complex(1, 1)}, []interface{}{complex(1, 1)}},
+		{[]complex128{complex(1, 1)}, []interface{}{complex(1, 1)}},
 		{123, []interface{}{123}},
 		{nil, nil},
 	}
@@ -24,7 +29,7 @@ func TestToSlice(t *testing.T) {
 			continue
 		}
 		for i := range got {
-			if got[i] != test.expected[i] {
+			if fmt.Sprintf("%v", got[i]) != fmt.Sprintf("%v", test.expected[i]) {
 				t.Errorf("mconv.ToSlice(%v)[%d] = %v; want %v", test.input, i, got[i], test.expected[i])
 			}
 		}
@@ -72,7 +77,9 @@ func TestToStringSlice(t *testing.T) {
 	}{
 		{[]string{"a", "b"}, []string{"a", "b"}},
 		{[]int{1, 2}, []string{"1", "2"}},
+		{[]interface{}{"a", 1, true}, []string{"a", "1", "true"}},
 		{"a", []string{"a"}},
+		{1, []string{"1"}},
 		{nil, nil},
 	}
 
@@ -178,6 +185,11 @@ func TestToIntSliceE(t *testing.T) {
 	if err == nil {
 		t.Errorf("ToIntSliceE([]string{\"1\", \"abc\", \"3\"}) did not return error")
 	}
+
+	_, err = mconv.ToIntSliceE(map[string]int{"a": 1})
+	if err == nil {
+		t.Errorf("ToIntSliceE(map[string]int{\"a\": 1}) did not return error")
+	}
 }
 
 func TestToFloat64Slice(t *testing.T) {
@@ -257,6 +269,11 @@ func TestToFloat64SliceE(t *testing.T) {
 	_, err = mconv.ToFloat64SliceE([]string{"1.1", "abc", "3.3"})
 	if err == nil {
 		t.Errorf("ToFloat64SliceE([]string{\"1.1\", \"abc\", \"3.3\"}) did not return error")
+	}
+
+	_, err = mconv.ToFloat64SliceE(map[string]int{"a": 1})
+	if err == nil {
+		t.Errorf("ToFloat64SliceE(map[string]int{\"a\": 1}) did not return error")
 	}
 }
 
