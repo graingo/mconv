@@ -18,6 +18,9 @@ func ToIntE(value interface{}) (int, error) {
 	if value == nil {
 		return 0, nil
 	}
+	if converted, handled, err := checkedSignedNumber(value, strconv.IntSize, "int"); handled {
+		return int(converted), err
+	}
 
 	switch v := value.(type) {
 	case int:
@@ -86,6 +89,7 @@ func ToIntE(value interface{}) (int, error) {
 		}
 		return 0, nil
 	case string:
+		v = strings.TrimSpace(v)
 		i, err := strconv.ParseInt(v, 0, strconv.IntSize)
 		if err != nil {
 			return 0, internal.NewConversionError(value, "int", err)
@@ -107,6 +111,9 @@ func ToInt64E(value interface{}) (int64, error) {
 	if value == nil {
 		return 0, nil
 	}
+	if converted, handled, err := checkedSignedNumber(value, 64, "int64"); handled {
+		return converted, err
+	}
 
 	switch v := value.(type) {
 	case int:
@@ -120,6 +127,9 @@ func ToInt64E(value interface{}) (int64, error) {
 	case int8:
 		return int64(v), nil
 	case uint:
+		if uint64(v) > uint64(^uint64(0)>>1) {
+			return 0, internal.NewConversionError(value, "int64", internal.ErrOverflow)
+		}
 		return int64(v), nil
 	case uint64:
 		if v > uint64(^uint64(0)>>1) {
@@ -166,6 +176,7 @@ func ToInt64E(value interface{}) (int64, error) {
 		}
 		return 0, nil
 	case string:
+		v = strings.TrimSpace(v)
 		i, err := strconv.ParseInt(v, 0, 64)
 		if err != nil {
 			return 0, internal.NewConversionError(value, "int64", err)
@@ -186,6 +197,9 @@ func ToInt32(value interface{}) int32 {
 func ToInt32E(value interface{}) (int32, error) {
 	if value == nil {
 		return 0, nil
+	}
+	if converted, handled, err := checkedSignedNumber(value, 32, "int32"); handled {
+		return int32(converted), err
 	}
 
 	switch v := value.(type) {
@@ -279,6 +293,9 @@ func ToInt16(value interface{}) int16 {
 func ToInt16E(value interface{}) (int16, error) {
 	if value == nil {
 		return 0, nil
+	}
+	if converted, handled, err := checkedSignedNumber(value, 16, "int16"); handled {
+		return int16(converted), err
 	}
 
 	switch v := value.(type) {
@@ -378,6 +395,9 @@ func ToInt8(value interface{}) int8 {
 func ToInt8E(value interface{}) (int8, error) {
 	if value == nil {
 		return 0, nil
+	}
+	if converted, handled, err := checkedSignedNumber(value, 8, "int8"); handled {
+		return int8(converted), err
 	}
 
 	switch v := value.(type) {

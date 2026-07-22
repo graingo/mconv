@@ -1,7 +1,9 @@
 package basic
 
 import (
+	"math"
 	"strconv"
+	"strings"
 
 	"github.com/graingo/mconv/internal"
 )
@@ -48,6 +50,7 @@ func ToComplex128E(value interface{}) (complex128, error) {
 		return 0, nil
 	case string:
 		// Try to parse complex number
+		v = strings.TrimSpace(v)
 		c, err := strconv.ParseComplex(v, 128)
 		if err != nil {
 			// Try to parse as float
@@ -70,8 +73,9 @@ func ToComplex64E(value interface{}) (complex64, error) {
 		return 0, err
 	}
 
-	// check overflow
-	if real(c) > float64(float32(real(c))) || imag(c) > float64(float32(imag(c))) {
+	// Reject only finite values that exceed the complex64 component range.
+	if (!math.IsInf(real(c), 0) && !math.IsNaN(real(c)) && math.Abs(real(c)) > math.MaxFloat32) ||
+		(!math.IsInf(imag(c), 0) && !math.IsNaN(imag(c)) && math.Abs(imag(c)) > math.MaxFloat32) {
 		return 0, internal.NewConversionError(value, "complex64", internal.ErrOverflow)
 	}
 

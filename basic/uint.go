@@ -19,6 +19,9 @@ func ToUintE(value interface{}) (uint, error) {
 	if value == nil {
 		return 0, nil
 	}
+	if converted, handled, err := checkedUnsignedNumber(value, strconv.IntSize, "uint"); handled {
+		return uint(converted), err
+	}
 
 	switch v := value.(type) {
 	case uint:
@@ -116,6 +119,9 @@ func ToUint64E(value interface{}) (uint64, error) {
 	if value == nil {
 		return 0, nil
 	}
+	if converted, handled, err := checkedUnsignedNumber(value, 64, "uint64"); handled {
+		return converted, err
+	}
 
 	switch v := value.(type) {
 	case uint:
@@ -209,6 +215,9 @@ func ToUint32(value interface{}) uint32 {
 func ToUint32E(value interface{}) (uint32, error) {
 	if value == nil {
 		return 0, nil
+	}
+	if converted, handled, err := checkedUnsignedNumber(value, 32, "uint32"); handled {
+		return uint32(converted), err
 	}
 
 	switch v := value.(type) {
@@ -309,6 +318,9 @@ func ToUint16(value interface{}) uint16 {
 func ToUint16E(value interface{}) (uint16, error) {
 	if value == nil {
 		return 0, nil
+	}
+	if converted, handled, err := checkedUnsignedNumber(value, 16, "uint16"); handled {
+		return uint16(converted), err
 	}
 
 	switch v := value.(type) {
@@ -412,6 +424,9 @@ func ToUint8(value interface{}) uint8 {
 func ToUint8E(value interface{}) (uint8, error) {
 	if value == nil {
 		return 0, nil
+	}
+	if converted, handled, err := checkedUnsignedNumber(value, 8, "uint8"); handled {
+		return uint8(converted), err
 	}
 
 	switch v := value.(type) {

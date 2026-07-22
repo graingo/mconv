@@ -1,7 +1,9 @@
 package complex
 
 import (
+	"fmt"
 	"reflect"
+	"strings"
 
 	"github.com/graingo/mconv/basic"
 	"github.com/graingo/mconv/internal"
@@ -28,6 +30,9 @@ func ToMapE(value interface{}) (map[string]interface{}, error) {
 			key, err := basic.ToStringE(k)
 			if err != nil {
 				return nil, internal.NewConversionError(k, "map", err)
+			}
+			if _, exists := result[key]; exists {
+				return nil, internal.NewConversionError(k, "map", internal.ErrConversionFailed)
 			}
 			result[key] = val
 		}
@@ -82,6 +87,18 @@ func ToMapE(value interface{}) (map[string]interface{}, error) {
 		return result, nil
 	default:
 		rv := reflect.ValueOf(value)
+		for rv.IsValid() && (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) {
+			if rv.IsNil() {
+				return nil, nil
+			}
+			rv = rv.Elem()
+		}
+		if !rv.IsValid() {
+			return nil, nil
+		}
+		if rv.Kind() == reflect.Struct {
+			return structToMap(rv)
+		}
 		if rv.Kind() != reflect.Map {
 			return nil, internal.NewConversionError(value, "map", internal.ErrUnsupportedType)
 		}
@@ -92,10 +109,70 @@ func ToMapE(value interface{}) (map[string]interface{}, error) {
 			if err != nil {
 				return nil, internal.NewConversionError(key.Interface(), "map", err)
 			}
+			if _, exists := result[keyStr]; exists {
+				return nil, internal.NewConversionError(key.Interface(), "map", internal.ErrConversionFailed)
+			}
 			result[keyStr] = rv.MapIndex(key).Interface()
 		}
 		return result, nil
 	}
+}
+
+func structToMap(value reflect.Value) (map[string]interface{}, error) {
+	result := make(map[string]interface{})
+	valueType := value.Type()
+	for i := 0; i < value.NumField(); i++ {
+		fieldType := valueType.Field(i)
+		if !fieldType.IsExported() {
+			continue
+		}
+		fieldValue := value.Field(i)
+		if fieldType.Anonymous && fieldType.Tag.Get("mconv") == "" && fieldType.Tag.Get("json") == "" && fieldType.Tag.Get("yaml") == "" {
+			for fieldValue.IsValid() && fieldValue.Kind() == reflect.Ptr {
+				if fieldValue.IsNil() {
+					fieldValue = reflect.Value{}
+					break
+				}
+				fieldValue = fieldValue.Elem()
+			}
+			if fieldValue.IsValid() && fieldValue.Kind() == reflect.Struct {
+				embedded, err := structToMap(fieldValue)
+				if err != nil {
+					return nil, err
+				}
+				for key, item := range embedded {
+					if _, exists := result[key]; exists {
+						return nil, fmt.Errorf("embedded struct contains duplicate map key %q", key)
+					}
+					result[key] = item
+				}
+				continue
+			}
+			if !fieldValue.IsValid() {
+				continue
+			}
+		}
+
+		name := fieldType.Name
+		for _, tagName := range []string{"mconv", "json", "yaml"} {
+			tag := fieldType.Tag.Get(tagName)
+			if tag == "-" {
+				name = "-"
+				break
+			}
+			if taggedName := strings.Split(tag, ",")[0]; taggedName != "" {
+				name = taggedName
+				break
+			}
+		}
+		if name != "-" {
+			if _, exists := result[name]; exists {
+				return nil, fmt.Errorf("struct contains duplicate map key %q", name)
+			}
+			result[name] = fieldValue.Interface()
+		}
+	}
+	return result, nil
 }
 
 // ToStringMap converts any type to map[string]string

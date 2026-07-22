@@ -7,6 +7,7 @@ import (
 
 // TypeInfo stores reflection information about a type
 type TypeInfo struct {
+	mu sync.RWMutex
 	// Basic type information
 	Type        reflect.Type
 	Kind        reflect.Kind
@@ -27,7 +28,7 @@ type TypeInfo struct {
 
 // Type information cache
 var (
-	typeInfoCache     = sync.Map{}
+	typeInfoCache     sync.Map
 	typeInfoCacheSize = 1000 // Maximum cache size
 	typeInfoCacheLen  = 0    // Current cache length
 	typeInfoCacheLock sync.Mutex
@@ -70,43 +71,51 @@ func GetTypeInfo(t reflect.Type) *TypeInfo {
 		info.Methods[method.Name] = method
 	}
 
-	// Check cache size and store
+	// Check cache size and store. Double-check under the lock so concurrent
+	// callers do not inflate the size counter for the same type.
 	typeInfoCacheLock.Lock()
+	defer typeInfoCacheLock.Unlock()
+	if cached, ok := typeInfoCache.Load(t); ok {
+		return cached.(*TypeInfo)
+	}
 	if typeInfoCacheLen >= typeInfoCacheSize {
-		// Cache is full, clear it
-		typeInfoCache = sync.Map{}
+		clearSyncMap(&typeInfoCache)
 		typeInfoCacheLen = 0
 	}
-	typeInfoCacheLen++
-	typeInfoCacheLock.Unlock()
-
 	typeInfoCache.Store(t, info)
+	typeInfoCacheLen++
 	return info
 }
 
 // IsConvertibleTo checks if the type can be converted to the target type, result is cached
 func (ti *TypeInfo) IsConvertibleTo(target reflect.Type) bool {
-	// Check cache
+	ti.mu.RLock()
 	if result, ok := ti.ConvertibleTo[target]; ok {
+		ti.mu.RUnlock()
 		return result
 	}
+	ti.mu.RUnlock()
 
-	// Calculate result and cache it
 	result := ti.Type.ConvertibleTo(target)
+	ti.mu.Lock()
 	ti.ConvertibleTo[target] = result
+	ti.mu.Unlock()
 	return result
 }
 
 // IsAssignableTo checks if the type can be assigned to the target type, result is cached
 func (ti *TypeInfo) IsAssignableTo(target reflect.Type) bool {
-	// Check cache
+	ti.mu.RLock()
 	if result, ok := ti.AssignableTo[target]; ok {
+		ti.mu.RUnlock()
 		return result
 	}
+	ti.mu.RUnlock()
 
-	// Calculate result and cache it
 	result := ti.Type.AssignableTo(target)
+	ti.mu.Lock()
 	ti.AssignableTo[target] = result
+	ti.mu.Unlock()
 	return result
 }
 
@@ -134,8 +143,8 @@ func isContainerType(t reflect.Type) bool {
 
 // ClearTypeInfoCache clears the type information cache
 func ClearTypeInfoCache() {
-	typeInfoCache = sync.Map{}
 	typeInfoCacheLock.Lock()
+	clearSyncMap(&typeInfoCache)
 	typeInfoCacheLen = 0
 	typeInfoCacheLock.Unlock()
 }
@@ -148,7 +157,7 @@ func SetTypeInfoCacheSize(size int) {
 
 	typeInfoCacheLock.Lock()
 	typeInfoCacheSize = size
-	typeInfoCache = sync.Map{}
+	clearSyncMap(&typeInfoCache)
 	typeInfoCacheLen = 0
 	typeInfoCacheLock.Unlock()
 }
@@ -161,7 +170,7 @@ type ConversionPair struct {
 
 // Type conversion cache
 var (
-	conversionCache     = sync.Map{}
+	conversionCache     sync.Map
 	conversionCacheSize = 1000 // Maximum cache size
 	conversionCacheLen  = 0    // Current cache length
 	conversionCacheLock sync.Mutex
@@ -173,15 +182,17 @@ func CacheConversion(source, target reflect.Type, convertible bool) {
 
 	// Check cache size
 	conversionCacheLock.Lock()
+	defer conversionCacheLock.Unlock()
+	if _, exists := conversionCache.Load(pair); exists {
+		conversionCache.Store(pair, convertible)
+		return
+	}
 	if conversionCacheLen >= conversionCacheSize {
-		// Cache is full, clear it
-		conversionCache = sync.Map{}
+		clearSyncMap(&conversionCache)
 		conversionCacheLen = 0
 	}
-	conversionCacheLen++
-	conversionCacheLock.Unlock()
-
 	conversionCache.Store(pair, convertible)
+	conversionCacheLen++
 }
 
 // GetCachedConversion gets a cached type conversion result
@@ -195,8 +206,8 @@ func GetCachedConversion(source, target reflect.Type) (bool, bool) {
 
 // ClearConversionCache clears the type conversion cache
 func ClearConversionCache() {
-	conversionCache = sync.Map{}
 	conversionCacheLock.Lock()
+	clearSyncMap(&conversionCache)
 	conversionCacheLen = 0
 	conversionCacheLock.Unlock()
 }
@@ -209,7 +220,7 @@ func SetConversionCacheSize(size int) {
 
 	conversionCacheLock.Lock()
 	conversionCacheSize = size
-	conversionCache = sync.Map{}
+	clearSyncMap(&conversionCache)
 	conversionCacheLen = 0
 	conversionCacheLock.Unlock()
 }
@@ -249,7 +260,7 @@ type Decoder struct {
 
 var (
 	// structDecoderCache stores the cached decoders for struct types.
-	structDecoderCache = &sync.Map{}
+	structDecoderCache sync.Map
 )
 
 // GetDecoder gets a decoder for a given type from the cache.
@@ -267,5 +278,12 @@ func SetDecoder(key DecoderCacheKey, decoder *Decoder) {
 
 // ClearDecoderCache clears the decoder cache.
 func ClearDecoderCache() {
-	structDecoderCache = &sync.Map{}
+	clearSyncMap(&structDecoderCache)
+}
+
+func clearSyncMap(cache *sync.Map) {
+	cache.Range(func(key, _ interface{}) bool {
+		cache.Delete(key)
+		return true
+	})
 }

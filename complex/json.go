@@ -2,6 +2,7 @@ package complex
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/graingo/mconv/internal"
 )
@@ -36,7 +37,7 @@ func FromJSONE(jsonStr string, target interface{}) error {
 	// use json.Unmarshal to convert
 	err := json.Unmarshal([]byte(jsonStr), target)
 	if err != nil {
-		return internal.NewConversionError(jsonStr, "object", internal.ErrInvalidJSONFormat)
+		return internal.NewConversionError(jsonStr, "object", fmt.Errorf("%w: %v", internal.ErrInvalidJSONFormat, err))
 	}
 
 	return nil
@@ -59,7 +60,7 @@ func ToMapFromJSONE(jsonStr string) (map[string]interface{}, error) {
 	// use json.Unmarshal to convert
 	err := json.Unmarshal([]byte(jsonStr), &result)
 	if err != nil {
-		return nil, internal.NewConversionError(jsonStr, "map", internal.ErrInvalidJSONFormat)
+		return nil, internal.NewConversionError(jsonStr, "map", fmt.Errorf("%w: %v", internal.ErrInvalidJSONFormat, err))
 	}
 
 	return result, nil
@@ -83,7 +84,7 @@ func ToSliceFromJSONE(jsonStr string) ([]interface{}, error) {
 	// use json.Unmarshal to convert
 	err := json.Unmarshal([]byte(jsonStr), &result)
 	if err != nil {
-		return nil, internal.NewConversionError(jsonStr, "slice", internal.ErrInvalidJSONFormat)
+		return nil, internal.NewConversionError(jsonStr, "slice", fmt.Errorf("%w: %v", internal.ErrInvalidJSONFormat, err))
 	}
 
 	return result, nil

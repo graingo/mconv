@@ -19,6 +19,7 @@ go get github.com/graingo/mconv
 ## Features
 
 - Simple and intuitive API
+- Stable function entry points that cannot be reassigned at runtime
 - Zero dependencies
 - Comprehensive type conversion support
 - Thread-safe

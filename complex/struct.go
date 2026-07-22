@@ -63,8 +63,14 @@ func ToStructE(source, pointer interface{}, hooks ...HookFunc) error {
 
 	// For case-insensitive key matching, create a lookup map from lower-case key to original key.
 	lowerCaseKeyMap := make(map[string]string, len(sourceMap))
+	ambiguousKeys := make(map[string]struct{})
 	for k := range sourceMap {
-		lowerCaseKeyMap[strings.ToLower(k)] = k
+		lowerKey := strings.ToLower(k)
+		if existing, ok := lowerCaseKeyMap[lowerKey]; ok && existing != k {
+			ambiguousKeys[lowerKey] = struct{}{}
+			continue
+		}
+		lowerCaseKeyMap[lowerKey] = k
 	}
 
 	// Iterate over the fields in the decoder plan, not the struct fields directly.
@@ -79,7 +85,11 @@ func ToStructE(source, pointer interface{}, hooks ...HookFunc) error {
 
 		// 2. If not found, try case-insensitive match.
 		if !ok {
-			if originalKey, found := lowerCaseKeyMap[strings.ToLower(fieldDecoder.Name)]; found {
+			lowerKey := strings.ToLower(fieldDecoder.Name)
+			if _, ambiguous := ambiguousKeys[lowerKey]; ambiguous {
+				return fmt.Errorf("source contains ambiguous keys for field '%s'", fieldDecoder.Field.Name)
+			}
+			if originalKey, found := lowerCaseKeyMap[lowerKey]; found {
 				mapValue = sourceMap[originalKey]
 				ok = true
 			}
@@ -90,7 +100,10 @@ func ToStructE(source, pointer interface{}, hooks ...HookFunc) error {
 		}
 
 		// Get the field value by its cached index.
-		fieldVal := structRv.FieldByIndex(fieldDecoder.Index)
+		fieldVal, err := fieldByIndexAlloc(structRv, fieldDecoder.Index)
+		if err != nil {
+			return fmt.Errorf("failed to access field '%s': %w", fieldDecoder.Field.Name, err)
+		}
 
 		if !fieldVal.IsValid() || !fieldVal.CanSet() {
 			continue
@@ -122,6 +135,9 @@ func setFieldValue(field reflect.Value, value interface{}, hooks ...HookFunc) er
 		err      error
 	)
 	for _, hook := range hooks {
+		if hook == nil || fromType == nil {
+			continue
+		}
 		value, err = hook(fromType, field.Type(), value)
 		if err != nil {
 			return fmt.Errorf("hook function error: %w", err)
@@ -151,12 +167,12 @@ func setFieldValue(field reflect.Value, value interface{}, hooks ...HookFunc) er
 		if !valueRv.IsValid() {
 			return nil // Don't set nil to a pointer field
 		}
-		// Create a new instance for the pointer if the field is nil
-		if field.IsNil() {
-			field.Set(reflect.New(field.Type().Elem()))
+		converted := reflect.New(field.Type().Elem())
+		if err := setFieldValue(converted.Elem(), value, hooks...); err != nil {
+			return err
 		}
-		// Set the value of the element pointed to
-		return setFieldValue(field.Elem(), value, hooks...)
+		field.Set(converted)
+		return nil
 	}
 
 	switch field.Kind() {
@@ -273,15 +289,21 @@ func buildDecoderFields(t reflect.Type, indexPrefix []int, decoder *internal.Dec
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
 
-		// Recurse into anonymous embedded structs.
-		if field.Anonymous && field.Type.Kind() == reflect.Struct {
-			buildDecoderFields(field.Type, append(append([]int(nil), indexPrefix...), i), decoder)
-			continue
-		}
-
 		// Skip unexported fields.
 		if isUnexportedField(field) {
 			continue
+		}
+
+		// Recurse into anonymous embedded structs and pointers to structs.
+		if field.Anonymous {
+			embeddedType := field.Type
+			if embeddedType.Kind() == reflect.Ptr {
+				embeddedType = embeddedType.Elem()
+			}
+			if embeddedType.Kind() == reflect.Struct {
+				buildDecoderFields(embeddedType, append(append([]int(nil), indexPrefix...), i), decoder)
+				continue
+			}
 		}
 
 		// Parse the tag.
@@ -317,6 +339,26 @@ func buildDecoderFields(t reflect.Type, indexPrefix []int, decoder *internal.Dec
 		decoder.FieldArr = append(decoder.FieldArr, fieldDecoder)
 		decoder.Fields[key] = fieldDecoder
 	}
+}
+
+func fieldByIndexAlloc(value reflect.Value, indexes []int) (reflect.Value, error) {
+	current := value
+	for _, index := range indexes {
+		for current.Kind() == reflect.Ptr {
+			if current.IsNil() {
+				if !current.CanSet() {
+					return reflect.Value{}, errors.New("embedded pointer cannot be set")
+				}
+				current.Set(reflect.New(current.Type().Elem()))
+			}
+			current = current.Elem()
+		}
+		if current.Kind() != reflect.Struct || index >= current.NumField() {
+			return reflect.Value{}, errors.New("invalid field index")
+		}
+		current = current.Field(index)
+	}
+	return current, nil
 }
 
 // isUnexportedField checks if a struct field is unexported.

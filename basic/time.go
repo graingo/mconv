@@ -2,8 +2,10 @@ package basic
 
 import (
 	"fmt"
+	"math"
 	"reflect"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/graingo/mconv/internal"
@@ -16,7 +18,7 @@ func ToTimeE(value interface{}, formats ...string) (time.Time, error) {
 		return time.Time{}, nil
 	}
 
-	if cachedValue, ok := internal.GetTimeFromCache(value); ok {
+	if cachedValue, ok := internal.GetTimeFromCacheWithFormats(value, formats); ok {
 		return cachedValue, nil
 	}
 
@@ -35,8 +37,14 @@ func ToTimeE(value interface{}, formats ...string) (time.Time, error) {
 	case int32:
 		result = time.Unix(int64(v), 0)
 	case uint:
+		if uint64(v) > math.MaxInt64 {
+			return time.Time{}, internal.NewConversionError(value, "time.Time", internal.ErrOverflow)
+		}
 		result = time.Unix(int64(v), 0)
 	case uint64:
+		if v > math.MaxInt64 {
+			return time.Time{}, internal.NewConversionError(value, "time.Time", internal.ErrOverflow)
+		}
 		result = time.Unix(int64(v), 0)
 	case uint32:
 		result = time.Unix(int64(v), 0)
@@ -45,7 +53,7 @@ func ToTimeE(value interface{}, formats ...string) (time.Time, error) {
 	}
 
 	if err == nil {
-		internal.AddTimeToCache(value, result)
+		internal.AddTimeToCacheWithFormats(value, formats, result)
 	}
 
 	return result, err
@@ -61,11 +69,15 @@ func ToTime(value interface{}, formats ...string) time.Time {
 // parseTimeString parses a string to time.Time
 func parseTimeString(s string, formats ...string) (time.Time, error) {
 	if len(formats) != 0 {
-		if t, err := time.Parse(formats[0], s); err != nil {
-			return time.Time{}, internal.NewConversionError(s, "time.Time", err)
-		} else {
-			return t, nil
+		var lastErr error
+		for _, format := range formats {
+			if t, err := time.Parse(format, s); err == nil {
+				return t, nil
+			} else {
+				lastErr = err
+			}
 		}
+		return time.Time{}, internal.NewConversionError(s, "time.Time", lastErr)
 	}
 
 	// Try to parse as Unix timestamp
@@ -106,6 +118,9 @@ func ToDurationE(value interface{}) (time.Duration, error) {
 	if value == nil {
 		return 0, nil
 	}
+	if converted, handled, err := checkedSignedNumber(value, 64, "time.Duration"); handled {
+		return time.Duration(converted), err
+	}
 
 	switch v := value.(type) {
 	case time.Duration:
@@ -121,8 +136,14 @@ func ToDurationE(value interface{}) (time.Duration, error) {
 	case int8:
 		return time.Duration(v), nil
 	case uint:
+		if uint64(v) > math.MaxInt64 {
+			return 0, internal.NewConversionError(value, "time.Duration", internal.ErrOverflow)
+		}
 		return time.Duration(v), nil
 	case uint64:
+		if v > math.MaxInt64 {
+			return 0, internal.NewConversionError(value, "time.Duration", internal.ErrOverflow)
+		}
 		return time.Duration(v), nil
 	case uint32:
 		return time.Duration(v), nil
@@ -131,10 +152,11 @@ func ToDurationE(value interface{}) (time.Duration, error) {
 	case uint8:
 		return time.Duration(v), nil
 	case float64:
-		return time.Duration(v), nil // Float values are treated as nanoseconds
+		return time.Duration(v), nil // Handled by checkedSignedNumber above.
 	case float32:
 		return time.Duration(v), nil
 	case string:
+		v = strings.TrimSpace(v)
 		// Try to parse using time.ParseDuration first (e.g., "1h", "10m", "30s")
 		d, err := time.ParseDuration(v)
 		if err == nil {
@@ -148,7 +170,8 @@ func ToDurationE(value interface{}) (time.Duration, error) {
 
 		// Try to parse as float (nanoseconds)
 		if f, err := strconv.ParseFloat(v, 64); err == nil {
-			return time.Duration(f), nil
+			converted, _, conversionErr := checkedSignedNumber(f, 64, "time.Duration")
+			return time.Duration(converted), conversionErr
 		}
 
 		return 0, internal.NewConversionError(value, "time.Duration", fmt.Errorf("cannot parse %q as duration", v))
@@ -159,9 +182,13 @@ func ToDurationE(value interface{}) (time.Duration, error) {
 		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
 			return time.Duration(rv.Int()), nil
 		case reflect.Uint, reflect.Uint8, reflect.Uint16, reflect.Uint32, reflect.Uint64:
+			if rv.Uint() > math.MaxInt64 {
+				return 0, internal.NewConversionError(value, "time.Duration", internal.ErrOverflow)
+			}
 			return time.Duration(rv.Uint()), nil
 		case reflect.Float32, reflect.Float64:
-			return time.Duration(rv.Float()), nil
+			converted, _, err := checkedSignedNumber(rv.Float(), 64, "time.Duration")
+			return time.Duration(converted), err
 		}
 		return 0, internal.NewConversionError(value, "time.Duration", internal.ErrUnsupportedType)
 	}

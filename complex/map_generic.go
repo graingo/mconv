@@ -3,7 +3,6 @@ package complex
 import (
 	"reflect"
 
-	"github.com/graingo/mconv/basic"
 	"github.com/graingo/mconv/internal"
 )
 
@@ -60,91 +59,21 @@ func ToMapTE[K comparable, V any](value interface{}) (map[K]V, error) {
 	result := make(map[K]V)
 
 	for k, v := range m {
-		var keyConverted K
-		keyRv := reflect.ValueOf(k)
-
-		var keyErr error
-		if keyRv.Type().ConvertibleTo(kt) {
-			keyConverted = keyRv.Convert(kt).Interface().(K)
-		} else {
-			// try to convert via basic types
-			switch kt.Kind() {
-			case reflect.String:
-				keyConverted = any(basic.ToString(k)).(K)
-			case reflect.Int:
-				i, err := basic.ToIntE(k)
-				if err != nil {
-					keyErr = err
-				} else {
-					keyConverted = any(i).(K)
-				}
-			case reflect.Int64:
-				i, err := basic.ToInt64E(k)
-				if err != nil {
-					keyErr = err
-				} else {
-					keyConverted = any(i).(K)
-				}
-			default:
-				keyErr = internal.NewConversionError(k, "K", internal.ErrConversionFailed)
-			}
+		keyValue := reflect.New(kt).Elem()
+		if err := setGenericValue(keyValue, k); err != nil {
+			return nil, internal.NewConversionError(k, kt.String(), err)
 		}
-		if keyErr != nil {
-			return nil, keyErr
-		}
+		keyConverted := keyValue.Interface().(K)
 
-		// Convert value
-		var valueConverted V
-		var valueErr error
+		valueTarget := reflect.New(vt).Elem()
 		if v == nil {
-			result[keyConverted] = valueConverted
+			result[keyConverted] = valueTarget.Interface().(V)
 			continue
 		}
-		valueRv := reflect.ValueOf(v)
-		if valueRv.Type().ConvertibleTo(vt) {
-			valueConverted = valueRv.Convert(vt).Interface().(V)
-		} else {
-			// try to convert via basic types
-			switch vt.Kind() {
-			case reflect.String:
-				valueConverted = any(basic.ToString(v)).(V)
-			case reflect.Int:
-				i, err := basic.ToIntE(v)
-				if err != nil {
-					valueErr = err
-				} else {
-					valueConverted = any(i).(V)
-				}
-			case reflect.Int64:
-				i, err := basic.ToInt64E(v)
-				if err != nil {
-					valueErr = err
-				} else {
-					valueConverted = any(i).(V)
-				}
-			case reflect.Float64:
-				f, err := basic.ToFloat64E(v)
-				if err != nil {
-					valueErr = err
-				} else {
-					valueConverted = any(f).(V)
-				}
-			case reflect.Bool:
-				b, err := basic.ToBoolE(v)
-				if err != nil {
-					valueErr = err
-				} else {
-					valueConverted = any(b).(V)
-				}
-			default:
-				valueErr = internal.NewConversionError(v, "V", internal.ErrConversionFailed)
-			}
+		if err := setGenericValue(valueTarget, v); err != nil {
+			return nil, internal.NewConversionError(v, vt.String(), err)
 		}
-		if valueErr != nil {
-			return nil, valueErr
-		}
-
-		result[keyConverted] = valueConverted
+		result[keyConverted] = valueTarget.Interface().(V)
 	}
 
 	return result, nil

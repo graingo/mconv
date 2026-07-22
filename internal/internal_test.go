@@ -3,6 +3,7 @@ package internal_test
 import (
 	"errors"
 	"reflect"
+	"sync"
 	"testing"
 	"time"
 
@@ -21,6 +22,35 @@ func TestNewConversionError(t *testing.T) {
 	if err.Error() != expected {
 		t.Errorf("Expected '%s', got '%s'", expected, err.Error())
 	}
+}
+
+func TestCachesAreSafeDuringConcurrentReconfiguration(t *testing.T) {
+	type customInt int
+	target := reflect.TypeOf(int(0))
+	var wg sync.WaitGroup
+	for i := 0; i < 50; i++ {
+		wg.Add(3)
+		go func(index int) {
+			defer wg.Done()
+			internal.SetStringCacheSize(index % 4)
+			internal.AddStringToCache(index, "value")
+			_, _ = internal.GetStringFromCache(index)
+		}(i)
+		go func(index int) {
+			defer wg.Done()
+			internal.SetTimeCacheSize(index % 4)
+			internal.AddTimeToCache(index, time.Now())
+			_, _ = internal.GetTimeFromCache(index)
+		}(i)
+		go func() {
+			defer wg.Done()
+			info := internal.GetTypeInfo(reflect.TypeOf(customInt(0)))
+			_ = info.IsConvertibleTo(target)
+			_ = info.IsAssignableTo(target)
+			internal.ClearTypeInfoCache()
+		}()
+	}
+	wg.Wait()
 }
 
 func TestConversionError_Unwrap(t *testing.T) {

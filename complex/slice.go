@@ -64,7 +64,7 @@ func ToSliceE(value interface{}) ([]interface{}, error) {
 		return []interface{}{v}, nil
 	default:
 		rv := reflect.ValueOf(value)
-		if rv.Kind() != reflect.Slice {
+		if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
 			return []interface{}{value}, nil
 		}
 

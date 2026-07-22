@@ -3,7 +3,6 @@ package complex
 import (
 	"reflect"
 
-	"github.com/graingo/mconv/basic"
 	"github.com/graingo/mconv/internal"
 )
 
@@ -68,57 +67,16 @@ func ToSliceTE[T any](value interface{}) ([]T, error) {
 			continue
 		}
 
-		// Get value reflection value
-		vValue := reflect.ValueOf(v)
-		// Get cached type information to avoid repeated reflection operations
-		vTypeInfo := internal.GetTypeInfo(vValue.Type())
-
-		// Handle common types
-		switch any(result[0]).(type) {
-		case string:
-			strVal, e := basic.ToStringE(v)
-			if e != nil {
-				return nil, internal.NewConversionError(v, "T", e)
-			}
-			result[i] = any(strVal).(T)
-		case int:
-			intVal, e := basic.ToIntE(v)
-			if e != nil {
-				return nil, internal.NewConversionError(v, "T", e)
-			}
-			result[i] = any(intVal).(T)
-		case int64:
-			int64Val, e := basic.ToInt64E(v)
-			if e != nil {
-				return nil, internal.NewConversionError(v, "T", e)
-			}
-			result[i] = any(int64Val).(T)
-		case float64:
-			floatVal, e := basic.ToFloat64E(v)
-			if e != nil {
-				return nil, internal.NewConversionError(v, "T", e)
-			}
-			result[i] = any(floatVal).(T)
-		case bool:
-			boolVal, e := basic.ToBoolE(v)
-			if e != nil {
-				return nil, internal.NewConversionError(v, "T", e)
-			}
-			result[i] = any(boolVal).(T)
-		default:
-			// For other types, try direct conversion using cached type information
-			// Use cached assignability and convertibility checks for better performance
-			if vTypeInfo.IsAssignableTo(targetType) {
-				result[i] = v.(T)
-			} else if vTypeInfo.IsConvertibleTo(targetType) {
-				// Try to convert using reflection
-				converted := vValue.Convert(targetType)
-				result[i] = converted.Interface().(T)
-			} else {
-				return nil, internal.NewConversionError(v, "T", internal.ErrConversionFailed)
-			}
+		converted := reflect.New(targetType).Elem()
+		if err := setGenericValue(converted, v); err != nil {
+			return nil, internal.NewConversionError(v, targetType.String(), err)
 		}
+		result[i] = converted.Interface().(T)
 	}
 
 	return result, nil
+}
+
+func setGenericValue(target reflect.Value, value interface{}) error {
+	return setFieldValue(target, value, stringToTimeHookFunc(), stringToDurationHookFunc(), intToBoolHookFunc())
 }

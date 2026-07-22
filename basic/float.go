@@ -1,7 +1,9 @@
 package basic
 
 import (
+	"math"
 	"strconv"
+	"strings"
 
 	"github.com/graingo/mconv/internal"
 )
@@ -48,7 +50,7 @@ func ToFloat64E(value interface{}) (float64, error) {
 	case complex128:
 		return float64(real(v)), nil
 	case string:
-		f, err := strconv.ParseFloat(v, 64)
+		f, err := strconv.ParseFloat(strings.TrimSpace(v), 64)
 		if err != nil {
 			return 0, internal.NewConversionError(value, "float64", err)
 		}
@@ -77,6 +79,9 @@ func ToFloat32E(value interface{}) (float32, error) {
 
 	switch v := value.(type) {
 	case float64:
+		if !math.IsInf(v, 0) && !math.IsNaN(v) && math.Abs(v) > math.MaxFloat32 {
+			return 0, internal.NewConversionError(value, "float32", internal.ErrOverflow)
+		}
 		return float32(v), nil
 	case float32:
 		return v, nil
@@ -103,9 +108,12 @@ func ToFloat32E(value interface{}) (float32, error) {
 	case complex64:
 		return float32(real(v)), nil
 	case complex128:
+		if !math.IsInf(real(v), 0) && !math.IsNaN(real(v)) && math.Abs(real(v)) > math.MaxFloat32 {
+			return 0, internal.NewConversionError(value, "float32", internal.ErrOverflow)
+		}
 		return float32(real(v)), nil
 	case string:
-		f, err := strconv.ParseFloat(v, 32)
+		f, err := strconv.ParseFloat(strings.TrimSpace(v), 32)
 		if err != nil {
 			return 0, internal.NewConversionError(value, "float32", err)
 		}

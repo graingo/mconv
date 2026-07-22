@@ -19,6 +19,7 @@ go get github.com/graingo/mconv
 ## 特性
 
 - 简单直观的 API
+- 稳定的普通函数入口，公开转换 API 不可被运行时重新赋值
 - 零依赖
 - 全面的类型转换支持
 - 线程安全
