@@ -16,9 +16,8 @@
 go get github.com/graingo/mconv
 ```
 
-新代码统一导入根包 `github.com/graingo/mconv`。`basic` 和 `complex` 子包在
-v1 中继续保持兼容，但不作为新的应用代码入口。v2 边界见
-[V2_MIGRATION.md](V2_MIGRATION.md)。
+新代码统一导入根包 `github.com/graingo/mconv`。`basic` 和 `complex` 子包继续
+用于兼容已有代码，应用代码推荐使用根包作为统一入口。
 
 ## 快速开始
 
@@ -175,7 +174,7 @@ mconv.SetTimeCacheSize(100)
 defer mconv.SetTimeCacheSize(0)
 ```
 
-`SetStringCacheSize` 为兼容和实验场景保留。`SetTypeInfoCacheSize`、`SetConversionCacheSize`、`ClearTypeInfoCache`、`ClearConversionCache` 已废弃并保留为空操作，后续主版本会删除。
+`SetStringCacheSize` 为兼容和实验场景保留。`SetTypeInfoCacheSize`、`SetConversionCacheSize`、`ClearTypeInfoCache`、`ClearConversionCache` 已废弃，仅为源码兼容保留为空操作。
 
 ## 性能
 
