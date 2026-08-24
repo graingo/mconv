@@ -8,7 +8,7 @@
 
 [中文](README.md) | [English](README_EN.md)
 
-一个轻量级的高性能 Go 类型转换库。
+`mconv` 是一个零依赖的 Go 类型转换库，提供基础类型、容器、JSON 和结构体转换。最低支持 Go 1.18。
 
 ## 安装
 
@@ -16,234 +16,186 @@
 go get github.com/graingo/mconv
 ```
 
-## 特性
-
-- 简单直观的 API
-- 零依赖
-- 全面的类型转换支持
-- 线程安全
-- 高性能缓存机制
-- 泛型支持（Go 1.18+）
-- 反射结果缓存
-
-## 基本用法
-
-```go
-// 基本类型转换
-str := mconv.ToString(123)        // "123"
-num := mconv.ToInt("123")         // 123
-b := mconv.ToBool(1)              // true
-f := mconv.ToFloat64("123.45")    // 123.45
-t := mconv.ToTime("2006-01-02")   // time.Time
-
-// 带错误处理
-str, err := mconv.ToStringE(123)  // "123", nil
-num, err := mconv.ToIntE("abc")   // 0, error
-
-// 复杂类型转换
-slice := mconv.ToSlice([]int{1, 2, 3})  // []interface{}{1, 2, 3}
-strSlice := mconv.ToStringSlice([]int{1, 2, 3}) // []string{"1", "2", "3"}
-m := mconv.ToMap(map[string]int{"a": 1}) // map[string]interface{}{"a": 1}
-
-// JSON 转换
-jsonStr := mconv.ToJSON(map[string]interface{}{"name": "John"}) // {"name":"John"}
-personMap := mconv.ToMapFromJSON(`{"name":"Jane"}`) // map[string]interface{}{"name": "Jane"}
-
-```
-
-### 高级结构体转换
-
-`mconv` 包在 `complex` 子包中提供了一个强大的 `Struct` 函数 (以及它返回错误的版本 `StructE`)。这个工具专为将 `map[string]interface{}` 或其他 `struct` 灵活、高性能地转换为目标 `struct` 而设计。它利用缓存机制来优化重复转换，从而实现显著的速度提升。
-
-**主要特性:**
-
-- **简单转换**: 直接将数据映射到结构体的字段。
-- **标签驱动映射**: 使用 `mconv` 标签来映射不同名称的字段。
-- **不区分大小写**: 自动匹配源 `map` 中的键和结构体字段，不限制大小写。
-- **嵌套结构体**: 递归地转换嵌套的 `map` 或 `struct`。
-- **通过钩子扩展**: 提供自定义的 `HookFunc` 函数来处理特殊的转换逻辑。
-- **高性能**: 缓存结构体的分析结果，使得后续的转换非常快。
-
-**基础用法**
+## 快速开始
 
 ```go
 package main
 
 import (
 	"fmt"
-	"github.com/graingo/mconv/complex"
+
+	"github.com/graingo/mconv"
 )
 
 func main() {
-	type User struct {
-		ID   int    `mconv:"user_id"`
-		Name string `mconv:"user_name"`
-	}
-
-	source := map[string]interface{}{
-		"user_id":   123,
-		"USER_NAME": "Alice", // 不区分大小写匹配
-	}
-
-	var user User
-	err := complex.ToStructE(source, &user)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("%+v\n", user)
-	// Output: {ID:123 Name:Alice}
+	fmt.Println(mconv.ToString(42))       // 42
+	fmt.Println(mconv.ToInt("42"))       // 42
+	fmt.Println(mconv.ToBool("yes"))     // true
+	fmt.Println(mconv.ToDuration("1m"))  // 1m0s
 }
 ```
 
-**使用钩子 (Hooks)**
-
-您可以使用钩子注入自定义的转换逻辑。例如，将一个整型的状态转换为字符串。
+每个宽松入口都有返回错误的 `E` 版本：
 
 ```go
-package main
-
-import (
-	"fmt"
-	"github.com/graingo/mconv/complex"
-	"reflect"
-)
-
-func main() {
-	type Post struct {
-		Title  string
-		Status string `mconv:"status"`
-	}
-
-	// 这个钩子将整型 status 转换为字符串表示
-	intStatusToStringHook := func(from reflect.Type, to reflect.Type, data interface{}) (interface{}, error) {
-		if from.Kind() == reflect.Int && to.Kind() == reflect.String {
-			i, _ := data.(int)
-			switch i {
-			case 0:
-				return "Draft", nil
-			case 1:
-				return "Published", nil
-			default:
-				return "Unknown", nil
-			}
-		}
-		return data, nil
-	}
-
-	source := map[string]interface{}{
-		"Title":  "Hello World",
-		"status": 1,
-	}
-
-	var post Post
-	err := complex.ToStructE(source, &post, intStatusToStringHook)
-	if err != nil {
-		panic(err)
-	}
-
-	fmt.Printf("%+v\n", post)
-	// Output: {Title:Hello World Status:Published}
+value, err := mconv.ToIntE("42")
+if err != nil {
+	return err
 }
 ```
 
-默认情况下, `mconv` 包含一个内置钩子，用于处理从 `string` 到 `time.Time` 的转换。
+`ToInt`、`ToBool` 等宽松入口会忽略转换错误并返回目标类型零值。输入来自请求、配置或外部系统时，优先使用 `E` 版本。
 
-## 泛型支持（Go 1.18+）
+## 泛型转换
 
-```go
-import "github.com/graingo/mconv/complex"
-
-// 使用泛型进行切片转换
-strSlice := complex.ToSliceT[string]([]int{1, 2, 3}) // []string{"1", "2", "3"}
-intSlice := complex.ToSliceT[int]([]string{"1", "2", "3"}) // []int{1, 2, 3}
-
-// 使用泛型进行映射转换
-strMap := complex.ToMapT[string, string](map[string]int{"a": 1}) // map[string]string{"a": "1"}
-intMap := complex.ToMapT[string, int](map[string]interface{}{"a": "1"}) // map[string]int{"a": 1}
-```
-
-## 性能优化
+根包提供统一的泛型入口：
 
 ```go
-// 设置缓存大小
-mconv.SetStringCacheSize(2000)       // 设置字符串缓存大小（默认 1000）
-mconv.SetTimeCacheSize(200)          // 设置时间缓存大小（默认 100）
-mconv.SetTypeInfoCacheSize(1000)     // 设置类型信息缓存大小（默认 1000）
-mconv.SetConversionCacheSize(1000)   // 设置转换缓存大小（默认 1000）
+type User struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
 
-// 清除缓存
-mconv.ClearStringCache()             // 清除字符串缓存
-mconv.ClearTimeCache()               // 清除时间缓存
-mconv.ClearTypeInfoCache()           // 清除类型信息缓存
-mconv.ClearConversionCache()         // 清除转换缓存
-mconv.ClearAllCaches()               // 清除所有缓存
+user, err := mconv.ToE[User](map[string]any{
+	"id":   "7",
+	"name": "maltose",
+})
+
+numbers, err := mconv.ToSliceTE[int]([]string{"1", "2", "3"})
+labels, err := mconv.ToMapTE[int, string](map[string]int{"1": 10})
 ```
 
-## 基准测试结果
+忽略错误的对应入口为 `To[T]`、`ToSliceT[T]` 和 `ToMapT[K,V]`。
 
-以下基准测试结果在 Apple M2 处理器上测量：
+泛型 map 直接转换原始键，不经过字符串中转，因此可以保留任意可比较键：
 
-```
-BenchmarkToString-8                 13534419               107.5 ns/op            8 B/op           1 allocs/op
-BenchmarkToInt-8                    100000000               10.91 ns/op            0 B/op           0 allocs/op
-BenchmarkToBool-8                   178200254                6.75 ns/op            0 B/op           0 allocs/op
-BenchmarkToFloat64-8                54603055                20.84 ns/op            0 B/op           0 allocs/op
-BenchmarkToTime-8                   15548144                76.57 ns/op           32 B/op           1 allocs/op
-BenchmarkToSlice-8                  35479252                33.26 ns/op           40 B/op           2 allocs/op
-BenchmarkToStringSlice-8             3392653               364.7 ns/op           120 B/op           8 allocs/op
-BenchmarkToMap-8                     7964676               153.1 ns/op           336 B/op           2 allocs/op
-BenchmarkToJSON-8                    3466358               348.2 ns/op           192 B/op           7 allocs/op
+```go
+type Key struct{ ID int }
+
+result, err := mconv.ToMapTE[Key, int](map[Key]string{
+	{ID: 1}: "42",
+})
 ```
 
-泛型函数：
+## 结构体转换
 
-```
-BenchmarkToSliceT-8                  2906990               397.6 ns/op          136 B/op           6 allocs/op
-BenchmarkToMapT-8                    1654909               723.4 ns/op          688 B/op           7 allocs/op
-```
+`ToE[T]` 适合新代码，`ToStructE` 适合需要复用已有目标对象的场景：
 
-结构体转换：
+```go
+type Profile struct {
+	Name      string `mconv:"display_name"`
+	Age       int    `json:"age"`
+	Enabled   bool   `yaml:"enabled"`
+	CreatedAt time.Time
+}
 
-```
-BenchmarkStructConversion-8              7186039           166.4 ns/op          0 B/op          0 allocs/op
-BenchmarkStructConversionParallel-8     36372223            40.26 ns/op         0 B/op          0 allocs/op
-```
-
-## 反射缓存性能优势
-
-反射缓存是 mconv 库的一个重要特性，它可以显著提高类型转换的性能。以下基准测试结果展示了反射缓存的性能优势：
-
-```
-BenchmarkReflectionCache_TypeInfo/WithoutCache-8           8842224               133.9 ns/op            56 B/op           7 allocs/op
-BenchmarkReflectionCache_TypeInfo/WithCache-8             25792029                49.03 ns/op            0 B/op           0 allocs/op
+profile := Profile{Enabled: true}
+err := mconv.ToStructE(map[string]any{
+	"display_name": "Alice",
+	"age":          "18",
+	"CreatedAt":    "2026-08-24T12:00:00Z",
+}, &profile)
 ```
 
-从上述结果可以看出：
+结构体转换规则：
 
-1. **性能提升**：使用反射缓存后，处理相同类型的反射操作速度提高了约 2.7 倍（从 133.9 ns/op 降至 49.03 ns/op）。
-2. **内存优化**：使用缓存后，内存分配从每次操作 56 字节和 7 次分配减少到 0 字节和 0 次分配，完全消除了内存分配开销。
-3. **吞吐量提升**：每秒可处理的操作数从约 880 万增加到约 2580 万，提高了约 192%。
+- 标签优先级为 `mconv`、`json`、`yaml`，支持 `-` 和逗号选项。
+- 精确键匹配优先，其次进行大小写不敏感匹配。
+- 外层字段优先于匿名嵌入字段；同一深度的同名字段会返回歧义错误。
+- 匿名字段带显式标签时保持嵌套，不进行字段提升。
+- 多级指针、用户自定义基础类型、数组、slice、map 和嵌套结构体使用相同转换语义。
+- 转换先在隔离副本中完成；任何字段失败时，原目标对象保持不变。
+- map 键转换发生碰撞时返回错误，避免静默覆盖数据。
 
-对于大型数据结构，性能优势更加明显：
+## 自定义 Hook
 
+Hook 在默认的字符串时间、字符串时长转换之后执行：
+
+```go
+hook := func(from, to reflect.Type, data any) (any, error) {
+	if from.Kind() == reflect.Int && to.Kind() == reflect.String {
+		return fmt.Sprintf("status-%d", data.(int)), nil
+	}
+	return data, nil
+}
+
+value, err := mconv.ToE[string](1, hook)
 ```
-BenchmarkLargeSliceConversion/WithoutCache-8                  9327             121340 ns/op         46738 B/op        1747 allocs/op
-BenchmarkLargeSliceConversion/WithCache-8                     9620             121506 ns/op         46738 B/op        1747 allocs/op
+
+Hook 返回原值表示继续转换，返回新值表示交给后续 Hook 或内置转换处理，返回错误会终止整个转换。
+
+## 错误处理
+
+错误哨兵和 `ConversionError` 位于根包，可配合 `errors.Is`、`errors.As`：
+
+```go
+_, err := mconv.ToInt8E(128)
+if errors.Is(err, mconv.ErrOverflow) {
+	// handle overflow
+}
+
+var conversionErr *mconv.ConversionError
+if errors.As(err, &conversionErr) {
+	fmt.Println(conversionErr.TargetType)
+	fmt.Println(conversionErr.Path)
+}
 ```
 
-这些优势在处理大型数据集或需要频繁进行类型转换的应用中尤为明显。反射缓存通过存储类型信息和转换结果，避免了重复的反射操作，从而显著提高了性能。
+嵌套错误包含完整路径，例如 `Users[0].Age`。公开哨兵包括：
 
-## 使用场景
+- `ErrUnsupportedType`
+- `ErrConversionFailed`
+- `ErrOverflow`
+- `ErrInvalidTimeFormat`
+- `ErrInvalidJSONFormat`
 
-反射缓存在以下场景中特别有用：
+## JSON
 
-1. **API 服务**：需要频繁将数据在不同格式之间转换
-2. **数据处理管道**：处理大量结构相似的数据
-3. **ORM 和数据映射**：在数据库记录和结构体之间进行映射
-4. **配置处理**：解析和转换各种格式的配置数据
-5. **JSON/XML 处理**：频繁进行序列化和反序列化操作
+```go
+jsonText, err := mconv.ToJSONE(map[string]any{"name": "maltose"})
+
+var user User
+err = mconv.FromJSONE(jsonText, &user)
+
+data, err := mconv.ToMapFromJSONE(jsonText)
+```
+
+## 缓存策略
+
+结构体字段计划由库自动缓存，无需配置。
+
+字符串和时间值缓存默认关闭。基准显示字符串转换本身比加锁查询缓存更快；时间缓存只在少量热点字符串被高频重复解析时有收益。确认业务输入具有低基数特征后，可以主动开启时间缓存：
+
+```go
+mconv.SetTimeCacheSize(100)
+defer mconv.SetTimeCacheSize(0)
+```
+
+`SetStringCacheSize` 为兼容和实验场景保留。`SetTypeInfoCacheSize`、`SetConversionCacheSize`、`ClearTypeInfoCache`、`ClearConversionCache` 已废弃并保留为空操作，后续主版本会删除。
+
+## 性能
+
+以下数据来自 Apple M2，命令为 `go test -run '^$' -bench . -benchmem`。结果会随 Go 版本和机器变化：
+
+```text
+BenchmarkToString-8             ~21 ns/op       3 B/op      1 allocs/op
+BenchmarkToSliceT-8            ~160 ns/op     136 B/op      7 allocs/op
+BenchmarkToMapT-8              ~404 ns/op     488 B/op     12 allocs/op
+BenchmarkStructConversion-8    ~318 ns/op      48 B/op      1 allocs/op
+```
+
+时间缓存的典型权衡：重复值约 `75 ns/op`，关闭缓存约 `98 ns/op`；高基数输入开启缓存约 `340 ns/op`，关闭缓存约 `109 ns/op`。请用实际输入分布决定是否开启。
+
+## 开发与验证
+
+```bash
+go test -race ./...
+go vet ./...
+go test -run '^$' -bench . -benchmem
+```
+
+CI 同时验证 Go 1.18 和当前稳定版，并在稳定版运行 fuzz 冒烟测试。
 
 ## 许可证
 
-MIT 许可证
+MIT

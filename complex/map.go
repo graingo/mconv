@@ -1,6 +1,7 @@
 package complex
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/graingo/mconv/basic"
@@ -15,7 +16,7 @@ func ToMap(value interface{}) map[string]interface{} {
 
 // ToMapE converts any type to map[string]interface{} with error.
 func ToMapE(value interface{}) (map[string]interface{}, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
@@ -28,6 +29,9 @@ func ToMapE(value interface{}) (map[string]interface{}, error) {
 			key, err := basic.ToStringE(k)
 			if err != nil {
 				return nil, internal.NewConversionError(k, "map", err)
+			}
+			if _, exists := result[key]; exists {
+				return nil, internal.NewConversionError(k, "map", internal.ErrConversionFailed)
 			}
 			result[key] = val
 		}
@@ -82,8 +86,23 @@ func ToMapE(value interface{}) (map[string]interface{}, error) {
 		return result, nil
 	default:
 		rv := reflect.ValueOf(value)
+		for rv.IsValid() && (rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface) {
+			if rv.IsNil() {
+				return nil, nil
+			}
+			rv = rv.Elem()
+		}
+		if !rv.IsValid() {
+			return nil, nil
+		}
+		if rv.Kind() == reflect.Struct {
+			return structToMap(rv)
+		}
 		if rv.Kind() != reflect.Map {
 			return nil, internal.NewConversionError(value, "map", internal.ErrUnsupportedType)
+		}
+		if rv.IsNil() {
+			return nil, nil
 		}
 
 		result := make(map[string]interface{}, rv.Len())
@@ -92,10 +111,28 @@ func ToMapE(value interface{}) (map[string]interface{}, error) {
 			if err != nil {
 				return nil, internal.NewConversionError(key.Interface(), "map", err)
 			}
+			if _, exists := result[keyStr]; exists {
+				return nil, internal.NewConversionError(key.Interface(), "map", internal.ErrConversionFailed)
+			}
 			result[keyStr] = rv.MapIndex(key).Interface()
 		}
 		return result, nil
 	}
+}
+
+func structToMap(value reflect.Value) (map[string]interface{}, error) {
+	decoder := getDecoder(value.Type())
+	result := make(map[string]interface{}, len(decoder.FieldArr))
+	for _, fieldDecoder := range decoder.FieldArr {
+		if fieldDecoder.Ambiguous {
+			return nil, fmt.Errorf("struct contains ambiguous map key %q", fieldDecoder.Name)
+		}
+		fieldValue := fieldByIndex(value, fieldDecoder.Index)
+		if fieldValue.IsValid() {
+			result[fieldDecoder.Name] = fieldValue.Interface()
+		}
+	}
+	return result, nil
 }
 
 // ToStringMap converts any type to map[string]string
@@ -106,41 +143,30 @@ func ToStringMap(value interface{}) map[string]string {
 
 // ToStringMapE converts any type to map[string]string with error
 func ToStringMapE(value interface{}) (map[string]string, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
-	switch v := value.(type) {
-	case map[string]string:
+	if v, ok := value.(map[string]string); ok {
 		return v, nil
-	case map[string]interface{}:
-		result := make(map[string]string, len(v))
-		for k, val := range v {
-			key := k
-			str, err := basic.ToStringE(val)
-			if err != nil {
-				return nil, internal.NewConversionError(val, "map", err)
-			}
-			result[key] = str
-		}
-		return result, nil
-	case map[interface{}]interface{}:
-		result := make(map[string]string, len(v))
-		for k, val := range v {
-			key, err := basic.ToStringE(k)
-			if err != nil {
-				return nil, internal.NewConversionError(k, "map", err)
-			}
-			str, err := basic.ToStringE(val)
-			if err != nil {
-				return nil, internal.NewConversionError(val, "map", err)
-			}
-			result[key] = str
-		}
-		return result, nil
-	default:
-		return nil, internal.NewConversionError(value, "map", internal.ErrUnsupportedType)
 	}
+
+	source, err := ToMapE(value)
+	if err != nil {
+		return nil, internal.NewConversionError(value, "map[string]string", err)
+	}
+	if source == nil {
+		return nil, nil
+	}
+	result := make(map[string]string, len(source))
+	for key, item := range source {
+		converted, err := basic.ToStringE(item)
+		if err != nil {
+			return nil, internal.NewConversionError(item, "string", err)
+		}
+		result[key] = converted
+	}
+	return result, nil
 }
 
 // ToIntMap converts any type to map[string]int.
@@ -151,7 +177,7 @@ func ToIntMap(value interface{}) map[string]int {
 
 // ToIntMapE converts any type to map[string]int with error.
 func ToIntMapE(value interface{}) (map[string]int, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
@@ -196,7 +222,7 @@ func ToFloat64Map(value interface{}) map[string]float64 {
 
 // ToFloat64MapE converts any type to map[string]float64 with error.
 func ToFloat64MapE(value interface{}) (map[string]float64, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 

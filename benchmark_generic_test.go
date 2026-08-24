@@ -1,12 +1,10 @@
 package mconv_test
 
 import (
-	"reflect"
 	"testing"
 
 	"github.com/graingo/mconv"
 	"github.com/graingo/mconv/complex"
-	"github.com/graingo/mconv/internal"
 )
 
 // Complex struct for testing reflection performance
@@ -39,60 +37,6 @@ func BenchmarkToMapT(b *testing.B) {
 	}
 }
 
-// Direct reflection cache benchmarks
-func BenchmarkReflectionCache_TypeInfo(b *testing.B) {
-	// Create a complex struct for testing
-	testStruct := ComplexStruct{
-		Name:     "Test User",
-		Age:      30,
-		Score:    95.5,
-		IsActive: true,
-		Tags:     []string{"tag1", "tag2", "tag3"},
-		Scores:   map[string]float64{"math": 95.5, "science": 92.0, "history": 88.5},
-	}
-	testStruct.NestedStruct.Field1 = "Nested Field"
-	testStruct.NestedStruct.Field2 = 42
-
-	// First run without cache
-	b.Run("WithoutCache", func(b *testing.B) {
-		// Clear cache before testing
-		mconv.ClearTypeInfoCache()
-
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			// Get type info directly using reflect
-			t := reflect.TypeOf(testStruct)
-			kind := t.Kind()
-			numField := 0
-			if kind == reflect.Struct {
-				numField = t.NumField()
-				for j := 0; j < numField; j++ {
-					field := t.Field(j)
-					_ = field.Name
-					_ = field.Type
-				}
-			}
-		}
-	})
-
-	// Run with cache
-	b.Run("WithCache", func(b *testing.B) {
-		// Warm up cache
-		typeInfo := internal.GetTypeInfo(reflect.TypeOf(testStruct))
-
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			// Get type info using cache
-			_ = internal.GetTypeInfo(reflect.TypeOf(testStruct))
-			for _, fieldName := range typeInfo.FieldNames {
-				field := typeInfo.Fields[fieldName]
-				_ = field.Name
-				_ = field.Type
-			}
-		}
-	})
-}
-
 // Complex struct conversion benchmarks
 func BenchmarkComplexStructConversion(b *testing.B) {
 	// Create a complex struct for testing
@@ -107,28 +51,11 @@ func BenchmarkComplexStructConversion(b *testing.B) {
 	testStruct.NestedStruct.Field1 = "Nested Field"
 	testStruct.NestedStruct.Field2 = 42
 
-	// First run without cache
-	b.Run("WithoutCache", func(b *testing.B) {
-		// Clear cache before testing
-		mconv.ClearTypeInfoCache()
-		mconv.ClearConversionCache()
-
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			mconv.ToMap(testStruct)
-		}
-	})
-
-	// Run with cache
-	b.Run("WithCache", func(b *testing.B) {
-		// Warm up cache
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		mconv.ToMap(testStruct)
-
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			mconv.ToMap(testStruct)
-		}
-	})
+	}
 }
 
 // Large slice conversion benchmarks
@@ -139,26 +66,9 @@ func BenchmarkLargeSliceConversion(b *testing.B) {
 		largeIntSlice[i] = i
 	}
 
-	// First run without cache
-	b.Run("WithoutCache", func(b *testing.B) {
-		// Clear cache before testing
-		mconv.ClearTypeInfoCache()
-		mconv.ClearConversionCache()
-
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			complex.ToSliceT[string](largeIntSlice)
-		}
-	})
-
-	// Run with cache
-	b.Run("WithCache", func(b *testing.B) {
-		// Warm up cache
+	b.ReportAllocs()
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
 		complex.ToSliceT[string](largeIntSlice)
-
-		b.ResetTimer()
-		for i := 0; i < b.N; i++ {
-			complex.ToSliceT[string](largeIntSlice)
-		}
-	})
+	}
 }

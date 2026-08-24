@@ -1,15 +1,15 @@
 package complex
 
 import (
+	"fmt"
 	"reflect"
 
-	"github.com/graingo/mconv/basic"
 	"github.com/graingo/mconv/internal"
 )
 
 // ToSliceT converts any type to []T.
-// This is a generic version of ToSlice that returns a slice of type T.
-// It uses reflection caching to improve performance for repeated conversions.
+// Scalar targets use direct converters; defined and complex targets use the
+// shared reflection decoder.
 //
 // Examples:
 //
@@ -27,8 +27,7 @@ func ToSliceT[T any](value interface{}) []T {
 }
 
 // ToSliceTE converts any type to []T with error.
-// This is a generic version of ToSliceE that returns a slice of type T.
-// It uses reflection caching to improve performance for repeated conversions.
+// Errors include the failing element index in ConversionError.Path.
 //
 // Examples:
 //
@@ -41,84 +40,62 @@ func ToSliceT[T any](value interface{}) []T {
 //	// Convert to []float64 with error handling
 //	floatSlice, err := ToSliceTE[float64](value)
 func ToSliceTE[T any](value interface{}) ([]T, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
-	// Check if value is already a []T
 	if v, ok := value.([]T); ok {
 		return v, nil
 	}
 
-	// Get target type
-	targetType := reflect.TypeOf((*T)(nil)).Elem()
-
-	// Convert to []interface{} first
-	s, err := ToSliceE(value)
-	if err != nil {
-		return nil, internal.NewConversionError(value, "[]T", err)
+	source, valid := indirectValue(value)
+	if !valid {
+		return nil, nil
 	}
 
-	// Create result slice
-	result := make([]T, len(s))
+	var length int
+	collection := source.Kind() == reflect.Slice || source.Kind() == reflect.Array
+	if collection {
+		length = source.Len()
+	} else {
+		length = 1
+	}
 
-	// Convert each element
-	for i, v := range s {
-		if v == nil {
+	result := make([]T, length)
+	convert := genericConverter[T]()
+
+	for i := 0; i < length; i++ {
+		item := source
+		if collection {
+			item = source.Index(i)
+		}
+		if isNilReflectValue(item) {
 			continue
 		}
 
-		// Get value reflection value
-		vValue := reflect.ValueOf(v)
-		// Get cached type information to avoid repeated reflection operations
-		vTypeInfo := internal.GetTypeInfo(vValue.Type())
-
-		// Handle common types
-		switch any(result[0]).(type) {
-		case string:
-			strVal, e := basic.ToStringE(v)
-			if e != nil {
-				return nil, internal.NewConversionError(v, "T", e)
-			}
-			result[i] = any(strVal).(T)
-		case int:
-			intVal, e := basic.ToIntE(v)
-			if e != nil {
-				return nil, internal.NewConversionError(v, "T", e)
-			}
-			result[i] = any(intVal).(T)
-		case int64:
-			int64Val, e := basic.ToInt64E(v)
-			if e != nil {
-				return nil, internal.NewConversionError(v, "T", e)
-			}
-			result[i] = any(int64Val).(T)
-		case float64:
-			floatVal, e := basic.ToFloat64E(v)
-			if e != nil {
-				return nil, internal.NewConversionError(v, "T", e)
-			}
-			result[i] = any(floatVal).(T)
-		case bool:
-			boolVal, e := basic.ToBoolE(v)
-			if e != nil {
-				return nil, internal.NewConversionError(v, "T", e)
-			}
-			result[i] = any(boolVal).(T)
-		default:
-			// For other types, try direct conversion using cached type information
-			// Use cached assignability and convertibility checks for better performance
-			if vTypeInfo.IsAssignableTo(targetType) {
-				result[i] = v.(T)
-			} else if vTypeInfo.IsConvertibleTo(targetType) {
-				// Try to convert using reflection
-				converted := vValue.Convert(targetType)
-				result[i] = converted.Interface().(T)
-			} else {
-				return nil, internal.NewConversionError(v, "T", internal.ErrConversionFailed)
-			}
+		itemValue := item.Interface()
+		converted, err := convertGenericValue(itemValue, convert)
+		if err != nil {
+			return nil, internal.PrependConversionPath(err, fmt.Sprintf("[%d]", i))
 		}
+		result[i] = converted
 	}
 
 	return result, nil
+}
+
+func isNilReflectValue(value reflect.Value) bool {
+	if !value.IsValid() {
+		return true
+	}
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
+
+func setGenericValue(target reflect.Value, value interface{}) error {
+	return setFieldValue(target, value, defaultHooks...)
 }

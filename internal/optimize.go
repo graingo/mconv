@@ -1,314 +1,244 @@
 package internal
 
 import (
-	"fmt"
+	"math"
+	"reflect"
+	"strconv"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
-// String cache, used to cache common string conversion results
-var (
-	stringCache     = sync.Map{}
-	stringCacheSize = 1000 // Maximum cache size
-	stringCacheLen  = 0    // Current cache length
-	stringCacheLock sync.Mutex
-)
-
-// Add string to cache
-func addStringToCache(key interface{}, value string) {
-	// Only cache basic types to avoid memory leaks from caching complex types
-	var cacheKey string
-	switch v := key.(type) {
-	case string:
-		cacheKey = v
-	case bool:
-		if v {
-			cacheKey = "bool:true"
-		} else {
-			cacheKey = "bool:false"
-		}
-	case int:
-		cacheKey = fmt.Sprintf("int:%d", v)
-	case int64:
-		cacheKey = fmt.Sprintf("int64:%d", v)
-	case int32:
-		cacheKey = fmt.Sprintf("int32:%d", v)
-	case int16:
-		cacheKey = fmt.Sprintf("int16:%d", v)
-	case int8:
-		cacheKey = fmt.Sprintf("int8:%d", v)
-	case uint:
-		cacheKey = fmt.Sprintf("uint:%d", v)
-	case uint64:
-		cacheKey = fmt.Sprintf("uint64:%d", v)
-	case uint32:
-		cacheKey = fmt.Sprintf("uint32:%d", v)
-	case uint16:
-		cacheKey = fmt.Sprintf("uint16:%d", v)
-	case uint8:
-		cacheKey = fmt.Sprintf("uint8:%d", v)
-	case float64:
-		cacheKey = fmt.Sprintf("float64:%g", v)
-	case float32:
-		cacheKey = fmt.Sprintf("float32:%g", v)
-	default:
-		// Do not cache other types
-		return
-	}
-
-	// Check if we need to clear the cache
-	stringCacheLock.Lock()
-	if stringCacheLen >= stringCacheSize {
-		stringCache = sync.Map{}
-		stringCacheLen = 0
-	}
-	stringCacheLen++
-	stringCacheLock.Unlock()
-
-	// Store in cache
-	stringCache.Store(cacheKey, value)
+var stringCache = struct {
+	sync.RWMutex
+	values map[scalarCacheKey]string
+}{
+	values: make(map[scalarCacheKey]string),
 }
 
-// Get string from cache
-func getStringFromCache(key interface{}) (string, bool) {
-	// Only get basic types from cache
-	var cacheKey string
-	switch v := key.(type) {
+var stringCacheSize int64
+
+type scalarCacheKey struct {
+	kind  reflect.Kind
+	text  string
+	first uint64
+}
+
+func basicCacheKey(value interface{}) (scalarCacheKey, bool) {
+	switch v := value.(type) {
 	case string:
-		cacheKey = v
+		return scalarCacheKey{kind: reflect.String, text: v}, true
 	case bool:
+		var encoded uint64
 		if v {
-			cacheKey = "bool:true"
-		} else {
-			cacheKey = "bool:false"
+			encoded = 1
 		}
+		return scalarCacheKey{kind: reflect.Bool, first: encoded}, true
 	case int:
-		cacheKey = fmt.Sprintf("int:%d", v)
+		return signedCacheKey(int64(v)), true
 	case int64:
-		cacheKey = fmt.Sprintf("int64:%d", v)
+		return signedCacheKey(v), true
 	case int32:
-		cacheKey = fmt.Sprintf("int32:%d", v)
+		return signedCacheKey(int64(v)), true
 	case int16:
-		cacheKey = fmt.Sprintf("int16:%d", v)
+		return signedCacheKey(int64(v)), true
 	case int8:
-		cacheKey = fmt.Sprintf("int8:%d", v)
+		return signedCacheKey(int64(v)), true
 	case uint:
-		cacheKey = fmt.Sprintf("uint:%d", v)
+		return unsignedCacheKey(uint64(v)), true
 	case uint64:
-		cacheKey = fmt.Sprintf("uint64:%d", v)
+		return unsignedCacheKey(v), true
 	case uint32:
-		cacheKey = fmt.Sprintf("uint32:%d", v)
+		return unsignedCacheKey(uint64(v)), true
 	case uint16:
-		cacheKey = fmt.Sprintf("uint16:%d", v)
+		return unsignedCacheKey(uint64(v)), true
 	case uint8:
-		cacheKey = fmt.Sprintf("uint8:%d", v)
+		return unsignedCacheKey(uint64(v)), true
 	case float64:
-		cacheKey = fmt.Sprintf("float64:%g", v)
+		return scalarCacheKey{kind: reflect.Float64, first: math.Float64bits(v)}, true
 	case float32:
-		cacheKey = fmt.Sprintf("float32:%g", v)
+		return scalarCacheKey{kind: reflect.Float32, first: uint64(math.Float32bits(v))}, true
 	default:
-		// Do not get other types from cache
+		return scalarCacheKey{}, false
+	}
+}
+
+func signedCacheKey(value int64) scalarCacheKey {
+	return scalarCacheKey{kind: reflect.Int64, first: uint64(value)}
+}
+
+func unsignedCacheKey(value uint64) scalarCacheKey {
+	return scalarCacheKey{kind: reflect.Uint64, first: value}
+}
+
+// AddStringToCache adds a string conversion result to the bounded cache.
+func AddStringToCache(value interface{}, result string) {
+	if atomic.LoadInt64(&stringCacheSize) <= 0 {
+		return
+	}
+	key, ok := basicCacheKey(value)
+	if !ok {
+		return
+	}
+	stringCache.Lock()
+	defer stringCache.Unlock()
+	size := atomic.LoadInt64(&stringCacheSize)
+	if size <= 0 {
+		return
+	}
+	if _, exists := stringCache.values[key]; !exists && int64(len(stringCache.values)) >= size {
+		stringCache.values = make(map[scalarCacheKey]string)
+	}
+	stringCache.values[key] = result
+}
+
+// GetStringFromCache gets a string conversion result from the cache.
+func GetStringFromCache(value interface{}) (string, bool) {
+	if atomic.LoadInt64(&stringCacheSize) <= 0 {
 		return "", false
 	}
-
-	// Get from cache
-	if value, ok := stringCache.Load(cacheKey); ok {
-		return value.(string), true
+	key, ok := basicCacheKey(value)
+	if !ok {
+		return "", false
 	}
-	return "", false
+	stringCache.RLock()
+	defer stringCache.RUnlock()
+	if atomic.LoadInt64(&stringCacheSize) <= 0 {
+		return "", false
+	}
+	result, exists := stringCache.values[key]
+	return result, exists
 }
 
-// Clear string cache
+// ClearStringCache clears the string conversion cache.
 func ClearStringCache() {
-	stringCache = sync.Map{}
-	stringCacheLock.Lock()
-	stringCacheLen = 0
-	stringCacheLock.Unlock()
+	stringCache.Lock()
+	stringCache.values = make(map[scalarCacheKey]string)
+	stringCache.Unlock()
 }
 
-// Set string cache size
+// SetStringCacheSize sets the string cache size. A non-positive size disables it.
 func SetStringCacheSize(size int) {
-	if size <= 0 {
-		stringCacheSize = 0
-		stringCache = sync.Map{}
-		stringCacheLen = 0
+	if size < 0 {
+		size = 0
+	}
+	stringCache.Lock()
+	atomic.StoreInt64(&stringCacheSize, int64(size))
+	stringCache.values = make(map[scalarCacheKey]string)
+	stringCache.Unlock()
+}
+
+var timeCache = struct {
+	sync.RWMutex
+	values map[timeConversionCacheKey]time.Time
+}{
+	values: make(map[timeConversionCacheKey]time.Time),
+}
+
+var timeCacheSize int64
+
+type timeConversionCacheKey struct {
+	value        scalarCacheKey
+	formatCount  int
+	singleFormat string
+	formats      string
+}
+
+func timeCacheKey(value interface{}, formats []string) (timeConversionCacheKey, bool) {
+	key, ok := basicCacheKey(value)
+	if !ok {
+		return timeConversionCacheKey{}, false
+	}
+	result := timeConversionCacheKey{value: key, formatCount: len(formats)}
+	switch len(formats) {
+	case 0:
+		return result, true
+	case 1:
+		result.singleFormat = formats[0]
+		return result, true
+	default:
+		var builder strings.Builder
+		for _, format := range formats {
+			builder.WriteString(strconv.Itoa(len(format)))
+			builder.WriteByte(':')
+			builder.WriteString(format)
+		}
+		result.formats = builder.String()
+		return result, true
+	}
+}
+
+// AddTimeToCache adds a time conversion using the default parsing formats.
+func AddTimeToCache(value interface{}, result time.Time) {
+	AddTimeToCacheWithFormats(value, nil, result)
+}
+
+// AddTimeToCacheWithFormats adds a time conversion result with its parsing formats.
+func AddTimeToCacheWithFormats(value interface{}, formats []string, result time.Time) {
+	if atomic.LoadInt64(&timeCacheSize) <= 0 {
 		return
 	}
-
-	stringCacheLock.Lock()
-	stringCacheSize = size
-	stringCache = sync.Map{}
-	stringCacheLen = 0
-	stringCacheLock.Unlock()
-}
-
-// Time format cache, used to cache common time format parsing results
-var (
-	timeCache     = sync.Map{}
-	timeCacheSize = 100 // Maximum cache size
-	timeCacheLen  = 0   // Current cache length
-	timeCacheLock sync.Mutex
-)
-
-// Add time to cache
-func addTimeToCache(key string, value time.Time) {
-	// Check if we need to clear the cache
-	timeCacheLock.Lock()
-	if timeCacheLen >= timeCacheSize {
-		timeCache = sync.Map{}
-		timeCacheLen = 0
+	key, ok := timeCacheKey(value, formats)
+	if !ok {
+		return
 	}
-	timeCacheLen++
-	timeCacheLock.Unlock()
-
-	// Store in cache
-	timeCache.Store(key, value)
-}
-
-// Get time from cache
-func getTimeFromCache(key string) (time.Time, bool) {
-	// Get from cache
-	if value, ok := timeCache.Load(key); ok {
-		return value.(time.Time), true
+	timeCache.Lock()
+	defer timeCache.Unlock()
+	size := atomic.LoadInt64(&timeCacheSize)
+	if size <= 0 {
+		return
 	}
-	return time.Time{}, false
+	if _, exists := timeCache.values[key]; !exists && int64(len(timeCache.values)) >= size {
+		timeCache.values = make(map[timeConversionCacheKey]time.Time)
+	}
+	timeCache.values[key] = result
 }
 
-// Clear time cache
+// GetTimeFromCache gets a time conversion using the default parsing formats.
+func GetTimeFromCache(value interface{}) (time.Time, bool) {
+	return GetTimeFromCacheWithFormats(value, nil)
+}
+
+// GetTimeFromCacheWithFormats gets a time conversion for the specified parsing formats.
+func GetTimeFromCacheWithFormats(value interface{}, formats []string) (time.Time, bool) {
+	if atomic.LoadInt64(&timeCacheSize) <= 0 {
+		return time.Time{}, false
+	}
+	key, ok := timeCacheKey(value, formats)
+	if !ok {
+		return time.Time{}, false
+	}
+	timeCache.RLock()
+	defer timeCache.RUnlock()
+	if atomic.LoadInt64(&timeCacheSize) <= 0 {
+		return time.Time{}, false
+	}
+	result, exists := timeCache.values[key]
+	return result, exists
+}
+
+// ClearTimeCache clears the time conversion cache.
 func ClearTimeCache() {
-	timeCache = sync.Map{}
-	timeCacheLock.Lock()
-	timeCacheLen = 0
-	timeCacheLock.Unlock()
+	timeCache.Lock()
+	timeCache.values = make(map[timeConversionCacheKey]time.Time)
+	timeCache.Unlock()
 }
 
-// Set time cache size
+// SetTimeCacheSize sets the time cache size. A non-positive size disables it.
 func SetTimeCacheSize(size int) {
 	if size < 0 {
-		return
+		size = 0
 	}
-
-	timeCacheLock.Lock()
-	if size == 0 {
-		timeCache = sync.Map{}
-		timeCacheLen = 0
-	}
-	timeCacheSize = size
-	timeCacheLock.Unlock()
+	timeCache.Lock()
+	atomic.StoreInt64(&timeCacheSize, int64(size))
+	timeCache.values = make(map[timeConversionCacheKey]time.Time)
+	timeCache.Unlock()
 }
 
-// ClearAllCaches clears all caches
+// ClearAllCaches clears all active conversion and decoder caches.
 func ClearAllCaches() {
 	ClearStringCache()
 	ClearTimeCache()
-	ClearTypeInfoCache()
-	ClearConversionCache()
-}
-
-// AddStringToCache adds string to cache.
-func AddStringToCache(value interface{}, result string) {
-	if stringCacheSize == 0 {
-		return
-	}
-	// Only cache basic types to avoid memory leaks
-	switch value.(type) {
-	case string, int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float64, float32, bool:
-		// These types can be safely cached
-	default:
-		// Do not cache other types
-		return
-	}
-
-	// Use type+value as cache key
-	cacheKey := fmt.Sprintf("%T:%v", value, value)
-
-	// Check if we need to clear the cache
-	stringCacheLock.Lock()
-	if stringCacheLen >= stringCacheSize {
-		stringCache = sync.Map{}
-		stringCacheLen = 0
-	}
-	stringCacheLen++
-	stringCacheLock.Unlock()
-
-	// Store in cache
-	stringCache.Store(cacheKey, result)
-}
-
-// GetStringFromCache gets string from cache.
-func GetStringFromCache(value interface{}) (string, bool) {
-	if stringCacheSize == 0 {
-		return "", false
-	}
-	// Only get basic types from cache
-	switch value.(type) {
-	case string, int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float64, float32, bool:
-		// These types can be safely cached
-	default:
-		// Do not get other types from cache
-		return "", false
-	}
-
-	// Use type+value as cache key
-	cacheKey := fmt.Sprintf("%T:%v", value, value)
-
-	// Get from cache
-	if result, ok := stringCache.Load(cacheKey); ok {
-		return result.(string), true
-	}
-	return "", false
-}
-
-// AddTimeToCache adds time to cache.
-func AddTimeToCache(value interface{}, result time.Time) {
-	if timeCacheSize == 0 {
-		return
-	}
-	// Only cache basic types to avoid memory leaks
-	switch value.(type) {
-	case string, int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float64, float32:
-		// These types can be safely cached
-	default:
-		// Do not cache other types
-		return
-	}
-
-	// Use type+value as cache key
-	cacheKey := fmt.Sprintf("%T:%v", value, value)
-
-	// Check if we need to clear the cache
-	timeCacheLock.Lock()
-	if timeCacheLen >= timeCacheSize {
-		timeCache = sync.Map{}
-		timeCacheLen = 0
-	}
-	timeCacheLen++
-	timeCacheLock.Unlock()
-
-	// Store in cache
-	timeCache.Store(cacheKey, result)
-}
-
-// GetTimeFromCache gets time from cache.
-func GetTimeFromCache(value interface{}) (time.Time, bool) {
-	if timeCacheSize == 0 {
-		return time.Time{}, false
-	}
-	// Only get basic types from cache
-	switch value.(type) {
-	case string, int, int64, int32, int16, int8, uint, uint64, uint32, uint16, uint8, float64, float32:
-		// These types can be safely cached
-	default:
-		// Do not get other types from cache
-		return time.Time{}, false
-	}
-
-	// Use type+value as cache key
-	cacheKey := fmt.Sprintf("%T:%v", value, value)
-
-	// Get from cache
-	if result, ok := timeCache.Load(cacheKey); ok {
-		return result.(time.Time), true
-	}
-	return time.Time{}, false
+	ClearDecoderCache()
 }

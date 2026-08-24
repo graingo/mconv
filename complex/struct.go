@@ -26,19 +26,14 @@ func ToStruct(source, pointer interface{}, hooks ...HookFunc) {
 	_ = ToStructE(source, pointer, hooks...)
 }
 
-// StructE is the same as Struct but returns an error.
+// ToStructE converts source into pointer and reports conversion errors.
 func ToStructE(source, pointer interface{}, hooks ...HookFunc) error {
 	if pointer == nil {
 		return errors.New("pointer cannot be nil")
 	}
 
-	// Prepend default hooks
-	allHooks := []HookFunc{stringToTimeHookFunc(), stringToDurationHookFunc(), intToBoolHookFunc()}
-	allHooks = append(allHooks, hooks...)
-
-	// Get the reflect.Value of the pointer and the struct
 	pointerRv := reflect.ValueOf(pointer)
-	if pointerRv.Kind() != reflect.Ptr {
+	if pointerRv.Kind() != reflect.Ptr || pointerRv.IsNil() {
 		return fmt.Errorf("pointer must be a pointer to a struct, but got %T", pointer)
 	}
 	structRv := pointerRv.Elem()
@@ -46,40 +41,71 @@ func ToStructE(source, pointer interface{}, hooks ...HookFunc) error {
 		return fmt.Errorf("pointer must be a pointer to a struct, but got a pointer to %s", structRv.Kind())
 	}
 
-	// Get the decoder plan from cache or build a new one.
-	decoder, err := getDecoder(structRv.Type(), allHooks...)
+	allHooks := make([]HookFunc, 0, len(defaultHooks)+len(hooks))
+	allHooks = append(allHooks, defaultHooks...)
+	allHooks = append(allHooks, hooks...)
+
+	converted, err := decodeStruct(source, structRv, allHooks)
 	if err != nil {
 		return err
 	}
+	structRv.Set(converted)
+	return nil
+}
 
-	// Convert source to map[string]interface{}
+// decodeStruct converts source into a new value based on current. The caller's
+// value remains unchanged until the returned value is committed.
+func decodeStruct(source interface{}, current reflect.Value, hooks []HookFunc) (reflect.Value, error) {
+	decoder := getDecoder(current.Type())
 	sourceMap, err := ToMapE(source)
 	if err != nil {
-		return fmt.Errorf("source data cannot be converted to a map: %w", err)
+		return reflect.Value{}, fmt.Errorf("source data cannot be converted to a map: %w", err)
 	}
 	if sourceMap == nil {
-		return nil
+		result := reflect.New(current.Type()).Elem()
+		result.Set(current)
+		return result, nil
 	}
 
-	// For case-insensitive key matching, create a lookup map from lower-case key to original key.
 	lowerCaseKeyMap := make(map[string]string, len(sourceMap))
+	ambiguousKeys := make(map[string]struct{})
 	for k := range sourceMap {
-		lowerCaseKeyMap[strings.ToLower(k)] = k
+		lowerKey := strings.ToLower(k)
+		if existing, ok := lowerCaseKeyMap[lowerKey]; ok && existing != k {
+			ambiguousKeys[lowerKey] = struct{}{}
+			continue
+		}
+		lowerCaseKeyMap[lowerKey] = k
 	}
 
-	// Iterate over the fields in the decoder plan, not the struct fields directly.
+	foldedDestinationCount := make(map[string]int, len(decoder.FieldArr))
+	result := reflect.New(current.Type()).Elem()
+	result.Set(current)
+
+	for _, fieldDecoder := range decoder.FieldArr {
+		foldedDestinationCount[strings.ToLower(fieldDecoder.Name)]++
+	}
+
 	for _, fieldDecoder := range decoder.FieldArr {
 		var (
 			mapValue any
 			ok       bool
 		)
 
-		// 1. Try case-sensitive match.
 		mapValue, ok = sourceMap[fieldDecoder.Name]
 
-		// 2. If not found, try case-insensitive match.
 		if !ok {
-			if originalKey, found := lowerCaseKeyMap[strings.ToLower(fieldDecoder.Name)]; found {
+			lowerKey := strings.ToLower(fieldDecoder.Name)
+			if _, ambiguous := ambiguousKeys[lowerKey]; ambiguous {
+				return reflect.Value{}, fmt.Errorf("source contains ambiguous keys for field '%s'", fieldDecoder.Field.Name)
+			}
+			if originalKey, found := lowerCaseKeyMap[lowerKey]; found {
+				if _, exactDestination := decoder.Fields[originalKey]; exactDestination {
+					continue
+				}
+				if foldedDestinationCount[lowerKey] > 1 {
+					return reflect.Value{}, fmt.Errorf("destination contains ambiguous fields for source key %q", originalKey)
+				}
 				mapValue = sourceMap[originalKey]
 				ok = true
 			}
@@ -88,21 +114,23 @@ func ToStructE(source, pointer interface{}, hooks ...HookFunc) error {
 		if !ok {
 			continue
 		}
-
-		// Get the field value by its cached index.
-		fieldVal := structRv.FieldByIndex(fieldDecoder.Index)
-
-		if !fieldVal.IsValid() || !fieldVal.CanSet() {
+		if fieldDecoder.Ambiguous {
+			return reflect.Value{}, fmt.Errorf("destination contains ambiguous fields for source key %q", fieldDecoder.Name)
+		}
+		if mapValue == nil {
 			continue
 		}
 
-		// Set the field value.
-		if err := setFieldValue(fieldVal, mapValue, allHooks...); err != nil {
-			return fmt.Errorf("failed to set field '%s': %w", fieldDecoder.Field.Name, err)
+		fieldVal, err := fieldByIndexCopyAlloc(result, fieldDecoder.Index)
+		if err != nil {
+			return reflect.Value{}, fmt.Errorf("failed to access field '%s': %w", fieldDecoder.Field.Name, err)
+		}
+
+		if err := setFieldValue(fieldVal, mapValue, hooks...); err != nil {
+			return reflect.Value{}, internal.PrependConversionPath(err, fieldDecoder.Name)
 		}
 	}
-
-	return nil
+	return result, nil
 }
 
 // setFieldValue sets a reflect.Value with an interface{} value, performing necessary type conversions.
@@ -122,6 +150,9 @@ func setFieldValue(field reflect.Value, value interface{}, hooks ...HookFunc) er
 		err      error
 	)
 	for _, hook := range hooks {
+		if hook == nil || fromType == nil {
+			continue
+		}
 		value, err = hook(fromType, field.Type(), value)
 		if err != nil {
 			return fmt.Errorf("hook function error: %w", err)
@@ -151,12 +182,12 @@ func setFieldValue(field reflect.Value, value interface{}, hooks ...HookFunc) er
 		if !valueRv.IsValid() {
 			return nil // Don't set nil to a pointer field
 		}
-		// Create a new instance for the pointer if the field is nil
-		if field.IsNil() {
-			field.Set(reflect.New(field.Type().Elem()))
+		converted := reflect.New(field.Type().Elem())
+		if err := setFieldValue(converted.Elem(), value, hooks...); err != nil {
+			return err
 		}
-		// Set the value of the element pointed to
-		return setFieldValue(field.Elem(), value, hooks...)
+		field.Set(converted)
+		return nil
 	}
 
 	switch field.Kind() {
@@ -200,8 +231,12 @@ func setFieldValue(field reflect.Value, value interface{}, hooks ...HookFunc) er
 		}
 		field.SetBool(b)
 	case reflect.Struct:
-		// Recursive call for nested structs
-		return ToStructE(value, field.Addr().Interface(), hooks...)
+		converted, err := decodeStruct(value, field, hooks)
+		if err != nil {
+			return err
+		}
+		field.Set(converted)
+		return nil
 	case reflect.Slice:
 		sliceData, err := ToSliceE(value)
 		if err != nil {
@@ -211,31 +246,12 @@ func setFieldValue(field reflect.Value, value interface{}, hooks ...HookFunc) er
 		for i, v := range sliceData {
 			elem := newSlice.Index(i)
 			if err := setFieldValue(elem, v, hooks...); err != nil {
-				return err
+				return internal.PrependConversionPath(err, fmt.Sprintf("[%d]", i))
 			}
 		}
 		field.Set(newSlice)
 	case reflect.Map:
-		mapData, err := ToMapE(value)
-		if err != nil {
-			return err
-		}
-		keyType := field.Type().Key()
-		valType := field.Type().Elem()
-		newMap := reflect.MakeMap(field.Type())
-		for k, v := range mapData {
-			newKey := reflect.New(keyType).Elem()
-			if err := setFieldValue(newKey, k, hooks...); err != nil {
-				return fmt.Errorf("failed to convert map key: %w", err)
-			}
-
-			newVal := reflect.New(valType).Elem()
-			if err := setFieldValue(newVal, v, hooks...); err != nil {
-				return fmt.Errorf("failed to convert map value for key '%s': %w", k, err)
-			}
-			newMap.SetMapIndex(newKey, newVal)
-		}
-		field.Set(newMap)
+		return setMapValue(field, value, hooks)
 	default:
 		// Try a final conversion attempt
 		if valueRv.IsValid() && valueRv.Type().ConvertibleTo(field.Type()) {
@@ -247,12 +263,58 @@ func setFieldValue(field reflect.Value, value interface{}, hooks ...HookFunc) er
 	return nil
 }
 
+func setMapValue(field reflect.Value, value interface{}, hooks []HookFunc) error {
+	source, valid := indirectValue(value)
+	if !valid {
+		field.Set(reflect.Zero(field.Type()))
+		return nil
+	}
+	if source.Kind() == reflect.Struct {
+		converted, err := ToMapE(source.Interface())
+		if err != nil {
+			return err
+		}
+		source = reflect.ValueOf(converted)
+	}
+	if source.Kind() != reflect.Map {
+		return internal.NewConversionError(value, field.Type().String(), internal.ErrUnsupportedType)
+	}
+	if source.IsNil() {
+		field.Set(reflect.Zero(field.Type()))
+		return nil
+	}
+
+	newMap := reflect.MakeMapWithSize(field.Type(), source.Len())
+	iterator := source.MapRange()
+	for iterator.Next() {
+		sourceKey := iterator.Key().Interface()
+		path := fmt.Sprintf("[%v]", sourceKey)
+
+		newKey := reflect.New(field.Type().Key()).Elem()
+		if err := setFieldValue(newKey, sourceKey, hooks...); err != nil {
+			return internal.PrependConversionPath(err, path)
+		}
+		if newMap.MapIndex(newKey).IsValid() {
+			collisionErr := internal.NewConversionError(sourceKey, field.Type().Key().String(), internal.ErrConversionFailed)
+			return internal.PrependConversionPath(collisionErr, path)
+		}
+
+		newValue := reflect.New(field.Type().Elem()).Elem()
+		if err := setFieldValue(newValue, iterator.Value().Interface(), hooks...); err != nil {
+			return internal.PrependConversionPath(err, path)
+		}
+		newMap.SetMapIndex(newKey, newValue)
+	}
+	field.Set(newMap)
+	return nil
+}
+
 // getDecoder retrieves a decoder for a given struct type from the cache.
 // If the decoder is not found in the cache, it builds a new one, caches it, and returns it.
-func getDecoder(destType reflect.Type, hooks ...HookFunc) (*internal.Decoder, error) {
-	cacheKey := internal.DecoderCacheKey{DestType: destType, NumHooks: len(hooks)}
+func getDecoder(destType reflect.Type) *internal.Decoder {
+	cacheKey := internal.DecoderCacheKey{DestType: destType}
 	if decoder, ok := internal.GetDecoder(cacheKey); ok {
-		return decoder, nil
+		return decoder
 	}
 
 	// Slow path: build a new decoder.
@@ -261,30 +323,35 @@ func getDecoder(destType reflect.Type, hooks ...HookFunc) (*internal.Decoder, er
 		FieldArr: make([]*internal.FieldDecoder, 0),
 	}
 
-	buildDecoderFields(destType, []int{}, decoder)
+	buildDecoderFields(destType, nil, 0, make(map[reflect.Type]struct{}), decoder)
 
 	// Cache the new decoder.
 	internal.SetDecoder(cacheKey, decoder)
-	return decoder, nil
+	return decoder
 }
 
 // buildDecoderFields recursively traverses a struct type and populates the decoder with field information.
-func buildDecoderFields(t reflect.Type, indexPrefix []int, decoder *internal.Decoder) {
+func buildDecoderFields(
+	t reflect.Type,
+	indexPrefix []int,
+	depth int,
+	ancestors map[reflect.Type]struct{},
+	decoder *internal.Decoder,
+) {
+	if _, exists := ancestors[t]; exists {
+		return
+	}
+	ancestors[t] = struct{}{}
+	defer delete(ancestors, t)
+
 	for i := 0; i < t.NumField(); i++ {
 		field := t.Field(i)
-
-		// Recurse into anonymous embedded structs.
-		if field.Anonymous && field.Type.Kind() == reflect.Struct {
-			buildDecoderFields(field.Type, append(append([]int(nil), indexPrefix...), i), decoder)
-			continue
-		}
 
 		// Skip unexported fields.
 		if isUnexportedField(field) {
 			continue
 		}
 
-		// Parse the tag.
 		tag := field.Tag.Get("mconv")
 		if tag == "" {
 			tag = field.Tag.Get("json")
@@ -299,24 +366,87 @@ func buildDecoderFields(t reflect.Type, indexPrefix []int, decoder *internal.Dec
 
 		key := field.Name
 		parts := strings.Split(tag, ",")
+		if parts[0] == "-" {
+			continue
+		}
 		if len(parts) > 0 && parts[0] != "" {
 			key = parts[0]
 		}
 
-		// If a field with the same name already exists in a shallower layer, skip this one.
-		if _, ok := decoder.Fields[key]; ok {
-			continue
+		if field.Anonymous && parts[0] == "" {
+			embeddedType := field.Type
+			if embeddedType.Kind() == reflect.Ptr {
+				embeddedType = embeddedType.Elem()
+			}
+			if embeddedType.Kind() == reflect.Struct {
+				buildDecoderFields(
+					embeddedType,
+					append(append([]int(nil), indexPrefix...), i),
+					depth+1,
+					ancestors,
+					decoder,
+				)
+				continue
+			}
 		}
 
 		fieldDecoder := &internal.FieldDecoder{
 			Field: field,
-			Index: append(append([]int(nil), indexPrefix...), i), // Must be a copy
+			Index: append(append([]int(nil), indexPrefix...), i),
 			Name:  key,
+			Depth: depth,
 		}
 
-		decoder.FieldArr = append(decoder.FieldArr, fieldDecoder)
-		decoder.Fields[key] = fieldDecoder
+		existing, exists := decoder.Fields[key]
+		switch {
+		case !exists:
+			decoder.FieldArr = append(decoder.FieldArr, fieldDecoder)
+			decoder.Fields[key] = fieldDecoder
+		case depth < existing.Depth:
+			*existing = *fieldDecoder
+		case depth == existing.Depth:
+			existing.Ambiguous = true
+		}
 	}
+}
+
+func fieldByIndex(value reflect.Value, indexes []int) reflect.Value {
+	current := value
+	for _, index := range indexes {
+		for current.Kind() == reflect.Ptr {
+			if current.IsNil() {
+				return reflect.Value{}
+			}
+			current = current.Elem()
+		}
+		if current.Kind() != reflect.Struct || index >= current.NumField() {
+			return reflect.Value{}
+		}
+		current = current.Field(index)
+	}
+	return current
+}
+
+func fieldByIndexCopyAlloc(value reflect.Value, indexes []int) (reflect.Value, error) {
+	current := value
+	for _, index := range indexes {
+		for current.Kind() == reflect.Ptr {
+			if !current.CanSet() {
+				return reflect.Value{}, errors.New("embedded pointer cannot be set")
+			}
+			cloned := reflect.New(current.Type().Elem())
+			if !current.IsNil() {
+				cloned.Elem().Set(current.Elem())
+			}
+			current.Set(cloned)
+			current = cloned.Elem()
+		}
+		if current.Kind() != reflect.Struct || index >= current.NumField() {
+			return reflect.Value{}, errors.New("invalid field index")
+		}
+		current = current.Field(index)
+	}
+	return current, nil
 }
 
 // isUnexportedField checks if a struct field is unexported.

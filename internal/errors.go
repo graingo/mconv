@@ -3,15 +3,14 @@ package internal
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 // define errors
 var (
-	ErrNilValue          = errors.New("input value is nil")
 	ErrUnsupportedType   = errors.New("unsupported type")
 	ErrConversionFailed  = errors.New("conversion failed")
 	ErrOverflow          = errors.New("value overflow")
-	ErrInvalidFormat     = errors.New("invalid format")
 	ErrInvalidTimeFormat = errors.New("invalid time format")
 	ErrInvalidJSONFormat = errors.New("invalid JSON format")
 )
@@ -21,12 +20,42 @@ type ConversionError struct {
 	Value      interface{}
 	Type       string
 	TargetType string
+	Path       string
 	Err        error
 }
 
 // Error implements the error interface.
 func (e *ConversionError) Error() string {
-	return fmt.Sprintf("unable to convert %#v of type %s to %s: %v", e.Value, e.Type, e.TargetType, e.Err)
+	location := ""
+	if e.Path != "" {
+		location = " at " + e.Path
+	}
+	return fmt.Sprintf("unable to convert %#v of type %s%s to %s: %v", e.Value, e.Type, location, e.TargetType, e.Err)
+}
+
+// PrependConversionPath adds a field or collection segment to an error path.
+func PrependConversionPath(err error, segment string) error {
+	if err == nil || segment == "" {
+		return err
+	}
+
+	var conversionErr *ConversionError
+	if errors.As(err, &conversionErr) {
+		cloned := *conversionErr
+		cloned.Path = joinConversionPath(segment, cloned.Path)
+		return &cloned
+	}
+	return fmt.Errorf("conversion failed at %s: %w", segment, err)
+}
+
+func joinConversionPath(prefix, path string) string {
+	if path == "" {
+		return prefix
+	}
+	if strings.HasPrefix(path, "[") {
+		return prefix + path
+	}
+	return prefix + "." + path
 }
 
 // Unwrap returns the underlying error.

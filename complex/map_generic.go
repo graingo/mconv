@@ -1,15 +1,14 @@
 package complex
 
 import (
+	"fmt"
 	"reflect"
 
-	"github.com/graingo/mconv/basic"
 	"github.com/graingo/mconv/internal"
 )
 
 // ToMapT converts any type to map[K]V.
-// This is a generic version of ToMap that returns a map with key type K and value type V.
-// It uses reflection caching to improve performance for repeated conversions.
+// Source keys are converted directly to K without a string intermediate.
 //
 // Examples:
 //
@@ -27,8 +26,7 @@ func ToMapT[K comparable, V any](value interface{}) map[K]V {
 }
 
 // ToMapTE converts any type to map[K]V with error.
-// This is a generic version of ToMapE that returns a map with key type K and value type V.
-// It uses reflection caching to improve performance for repeated conversions.
+// It rejects key collisions and includes the failing key in ConversionError.Path.
 //
 // Examples:
 //
@@ -41,7 +39,7 @@ func ToMapT[K comparable, V any](value interface{}) map[K]V {
 //	// Convert to map[int]float64 with error handling
 //	floatMap, err := ToMapTE[int, float64](value)
 func ToMapTE[K comparable, V any](value interface{}) (map[K]V, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
@@ -49,102 +47,51 @@ func ToMapTE[K comparable, V any](value interface{}) (map[K]V, error) {
 		return v, nil
 	}
 
-	m, err := ToMapE(value)
-	if err != nil {
-		return nil, internal.NewConversionError(value, "map[K]V", err)
+	source, valid := indirectValue(value)
+	if !valid {
+		return nil, nil
+	}
+	if source.Kind() == reflect.Struct {
+		converted, err := ToMapE(source.Interface())
+		if err != nil {
+			return nil, internal.NewConversionError(value, "map[K]V", err)
+		}
+		source = reflect.ValueOf(converted)
+	}
+	if source.Kind() != reflect.Map {
+		return nil, internal.NewConversionError(value, "map[K]V", internal.ErrUnsupportedType)
 	}
 
 	kt := reflect.TypeOf((*K)(nil)).Elem()
-	vt := reflect.TypeOf((*V)(nil)).Elem()
 
-	result := make(map[K]V)
-
-	for k, v := range m {
-		var keyConverted K
-		keyRv := reflect.ValueOf(k)
-
-		var keyErr error
-		if keyRv.Type().ConvertibleTo(kt) {
-			keyConverted = keyRv.Convert(kt).Interface().(K)
-		} else {
-			// try to convert via basic types
-			switch kt.Kind() {
-			case reflect.String:
-				keyConverted = any(basic.ToString(k)).(K)
-			case reflect.Int:
-				i, err := basic.ToIntE(k)
-				if err != nil {
-					keyErr = err
-				} else {
-					keyConverted = any(i).(K)
-				}
-			case reflect.Int64:
-				i, err := basic.ToInt64E(k)
-				if err != nil {
-					keyErr = err
-				} else {
-					keyConverted = any(i).(K)
-				}
-			default:
-				keyErr = internal.NewConversionError(k, "K", internal.ErrConversionFailed)
+	result := make(map[K]V, source.Len())
+	keysRemainUnique := source.Type().Key().AssignableTo(kt)
+	convertKey := genericConverter[K]()
+	convertValue := genericConverter[V]()
+	iterator := source.MapRange()
+	for iterator.Next() {
+		sourceKey := iterator.Key().Interface()
+		key, err := convertGenericValue(sourceKey, convertKey)
+		if err != nil {
+			return nil, internal.PrependConversionPath(err, fmt.Sprintf("[%v]", sourceKey))
+		}
+		if !keysRemainUnique {
+			if _, exists := result[key]; exists {
+				collisionErr := internal.NewConversionError(sourceKey, kt.String(), internal.ErrConversionFailed)
+				return nil, internal.PrependConversionPath(collisionErr, fmt.Sprintf("[%v]", sourceKey))
 			}
 		}
-		if keyErr != nil {
-			return nil, keyErr
-		}
 
-		// Convert value
-		var valueConverted V
-		var valueErr error
-		if v == nil {
-			result[keyConverted] = valueConverted
-			continue
-		}
-		valueRv := reflect.ValueOf(v)
-		if valueRv.Type().ConvertibleTo(vt) {
-			valueConverted = valueRv.Convert(vt).Interface().(V)
-		} else {
-			// try to convert via basic types
-			switch vt.Kind() {
-			case reflect.String:
-				valueConverted = any(basic.ToString(v)).(V)
-			case reflect.Int:
-				i, err := basic.ToIntE(v)
-				if err != nil {
-					valueErr = err
-				} else {
-					valueConverted = any(i).(V)
-				}
-			case reflect.Int64:
-				i, err := basic.ToInt64E(v)
-				if err != nil {
-					valueErr = err
-				} else {
-					valueConverted = any(i).(V)
-				}
-			case reflect.Float64:
-				f, err := basic.ToFloat64E(v)
-				if err != nil {
-					valueErr = err
-				} else {
-					valueConverted = any(f).(V)
-				}
-			case reflect.Bool:
-				b, err := basic.ToBoolE(v)
-				if err != nil {
-					valueErr = err
-				} else {
-					valueConverted = any(b).(V)
-				}
-			default:
-				valueErr = internal.NewConversionError(v, "V", internal.ErrConversionFailed)
+		sourceValue := iterator.Value()
+		var convertedValue V
+		if !isNilReflectValue(sourceValue) {
+			item := sourceValue.Interface()
+			convertedValue, err = convertGenericValue(item, convertValue)
+			if err != nil {
+				return nil, internal.PrependConversionPath(err, fmt.Sprintf("[%v]", sourceKey))
 			}
 		}
-		if valueErr != nil {
-			return nil, valueErr
-		}
-
-		result[keyConverted] = valueConverted
+		result[key] = convertedValue
 	}
 
 	return result, nil

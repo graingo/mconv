@@ -16,8 +16,13 @@ func ToUint(value interface{}) uint {
 
 // ToUintE converts any type to uint with error
 func ToUintE(value interface{}) (uint, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
+	}
+	if converted, handled, err := checkedUnsignedNumber(value, strconv.IntSize, "uint"); handled {
+		return uint(converted), err
 	}
 
 	switch v := value.(type) {
@@ -113,8 +118,13 @@ func ToUint64(value interface{}) uint64 {
 
 // ToUint64E converts any type to uint64 with error
 func ToUint64E(value interface{}) (uint64, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
+	}
+	if converted, handled, err := checkedUnsignedNumber(value, 64, "uint64"); handled {
+		return converted, err
 	}
 
 	switch v := value.(type) {
@@ -207,8 +217,13 @@ func ToUint32(value interface{}) uint32 {
 
 // ToUint32E converts any type to uint32 with error
 func ToUint32E(value interface{}) (uint32, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
+	}
+	if converted, handled, err := checkedUnsignedNumber(value, 32, "uint32"); handled {
+		return uint32(converted), err
 	}
 
 	switch v := value.(type) {
@@ -307,8 +322,13 @@ func ToUint16(value interface{}) uint16 {
 
 // ToUint16E converts any type to uint16 with error
 func ToUint16E(value interface{}) (uint16, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
+	}
+	if converted, handled, err := checkedUnsignedNumber(value, 16, "uint16"); handled {
+		return uint16(converted), err
 	}
 
 	switch v := value.(type) {
@@ -410,8 +430,13 @@ func ToUint8(value interface{}) uint8 {
 
 // ToUint8E converts any type to uint8 with error
 func ToUint8E(value interface{}) (uint8, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
+	}
+	if converted, handled, err := checkedUnsignedNumber(value, 8, "uint8"); handled {
+		return uint8(converted), err
 	}
 
 	switch v := value.(type) {

@@ -6,26 +6,61 @@ on:
   pull_request:
     branches: ["master"]
 
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   test:
+    name: Go ${{ matrix.go-version }}
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ["1.18.x", "stable"]
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v7
         with:
-          go-version: "1.18"
+          go-version: ${{ matrix.go-version }}
+          cache: false
 
-      - name: Run tests and generate coverage report
-        run: go test -v -coverprofile=coverage.out ./...
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test with race detector
+        run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
+
+      - name: Run fuzz smoke tests
+        if: matrix.go-version == 'stable'
+        run: |
+          go test ./basic -run '^$' -fuzz '^FuzzStringConversions$' -fuzztime 5s
+          go test ./basic -run '^$' -fuzz '^FuzzIntegerBoundaries$' -fuzztime 5s
+          go test ./complex -run '^$' -fuzz '^FuzzDecodedJSONConversions$' -fuzztime 5s
 
       - name: Display coverage summary
         run: go tool cover -func=coverage.out
 
+      - name: Enforce coverage
+        run: |
+          set -euo pipefail
+          coverage=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
+          awk -v coverage="$coverage" 'BEGIN {
+            minimum = 75.0
+            printf "Total coverage: %.1f%% (minimum: %.1f%%)\n", coverage, minimum
+            if (coverage < minimum) exit 1
+          }'
+
       - name: Upload coverage to Codecov
+        if: matrix.go-version == 'stable'
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}

@@ -15,7 +15,9 @@ func ToBool(value interface{}) bool {
 
 // ToBoolE converts any type to bool with error.
 func ToBoolE(value interface{}) (bool, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return false, nil
 	}
 
@@ -51,7 +53,7 @@ func ToBoolE(value interface{}) (bool, error) {
 	case complex128:
 		return real(v) != 0 || imag(v) != 0, nil
 	case string:
-		s := strings.ToLower(v)
+		s := strings.ToLower(strings.TrimSpace(v))
 		if s == "true" || s == "yes" || s == "y" || s == "1" {
 			return true, nil
 		} else if s == "false" || s == "no" || s == "n" || s == "0" {

@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"html/template"
+	"reflect"
 	"strconv"
 	"time"
 
@@ -12,7 +13,7 @@ import (
 
 // ToStringE converts any type to string with error
 func ToStringE(value interface{}) (string, error) {
-	if value == nil {
+	if isNilInput(value) {
 		return "", nil
 	}
 
@@ -73,6 +74,13 @@ func ToStringE(value interface{}) (string, error) {
 	case fmt.Stringer:
 		result = v.String()
 	default:
+		normalized, valid := normalizeInput(value)
+		if !valid {
+			return "", nil
+		}
+		if reflect.TypeOf(normalized) != reflect.TypeOf(value) {
+			return ToStringE(normalized)
+		}
 		result = fmt.Sprintf("%v", value)
 	}
 
