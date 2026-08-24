@@ -17,9 +17,8 @@ go get github.com/graingo/mconv
 ```
 
 New code should import the canonical root package `github.com/graingo/mconv`.
-The `basic` and `complex` subpackages remain compatible throughout v1 but are
-not recommended as new application entry points. See
-[V2_MIGRATION.md](V2_MIGRATION.md) for the v2 boundary.
+The `basic` and `complex` subpackages remain available for existing code, while
+the root package is the recommended application entry point.
 
 ## Quick start
 
@@ -176,7 +175,7 @@ mconv.SetTimeCacheSize(100)
 defer mconv.SetTimeCacheSize(0)
 ```
 
-`SetStringCacheSize` remains available for compatibility and experiments. `SetTypeInfoCacheSize`, `SetConversionCacheSize`, `ClearTypeInfoCache`, and `ClearConversionCache` are deprecated compatibility no-ops and will be removed in a future major release.
+`SetStringCacheSize` remains available for compatibility and experiments. `SetTypeInfoCacheSize`, `SetConversionCacheSize`, `ClearTypeInfoCache`, and `ClearConversionCache` are deprecated no-ops retained for source compatibility.
 
 ## Performance
 
