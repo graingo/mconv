@@ -8,527 +8,134 @@ import (
 	"github.com/graingo/mconv/internal"
 )
 
-// ToUint converts any type to uint
+// ToUint converts value to uint and returns zero when conversion fails.
 func ToUint(value interface{}) uint {
 	result, _ := ToUintE(value)
 	return result
 }
 
-// ToUintE converts any type to uint with error
+// ToUintE converts value to uint.
 func ToUintE(value interface{}) (uint, error) {
-	var valid bool
-	value, valid = normalizeInput(value)
-	if !valid {
-		return 0, nil
-	}
-	if converted, handled, err := checkedUnsignedNumber(value, strconv.IntSize, "uint"); handled {
-		return uint(converted), err
-	}
-
-	switch v := value.(type) {
-	case uint:
-		return v, nil
-	case uint64:
-		if v > uint64(^uint(0)) {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrOverflow)
-		}
-		return uint(v), nil
-	case uint32:
-		return uint(v), nil
-	case uint16:
-		return uint(v), nil
-	case uint8:
-		return uint(v), nil
-	case int:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrOverflow)
-		}
-		return uint(v), nil
-	case int64:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrOverflow)
-		}
-		return uint(v), nil
-	case int32:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrOverflow)
-		}
-		return uint(v), nil
-	case int16:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrOverflow)
-		}
-		return uint(v), nil
-	case int8:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrOverflow)
-		}
-		return uint(v), nil
-	case float64:
-		if v < 0 || v > float64(^uint(0)) {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrOverflow)
-		}
-		return uint(v), nil
-	case float32:
-		f := float64(v)
-		if f < 0 || f > float64(^uint(0)) {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrOverflow)
-		}
-		return uint(f), nil
-	case complex64:
-		if imag(v) != 0 {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrConversionFailed)
-		}
-		f := float64(real(v))
-		if f < 0 || f > float64(^uint(0)) {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrOverflow)
-		}
-		return uint(f), nil
-	case complex128:
-		if imag(v) != 0 {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrConversionFailed)
-		}
-		f := real(v)
-		if f < 0 || f > float64(^uint(0)) {
-			return 0, internal.NewConversionError(value, "uint", internal.ErrOverflow)
-		}
-		return uint(f), nil
-	case bool:
-		if v {
-			return 1, nil
-		}
-		return 0, nil
-	case string:
-		v = strings.TrimSpace(v)
-		u, err := strconv.ParseUint(v, 0, strconv.IntSize)
-		if err != nil {
-			return 0, internal.NewConversionError(value, "uint", err)
-		}
-		return uint(u), nil
-	default:
-		return 0, internal.NewConversionError(value, "uint", internal.ErrUnsupportedType)
-	}
+	converted, err := toUnsignedInteger(value, strconv.IntSize, "uint")
+	return uint(converted), err
 }
 
-// ToUint64 converts any type to uint64
+// ToUint64 converts value to uint64 and returns zero when conversion fails.
 func ToUint64(value interface{}) uint64 {
 	result, _ := ToUint64E(value)
 	return result
 }
 
-// ToUint64E converts any type to uint64 with error
+// ToUint64E converts value to uint64.
 func ToUint64E(value interface{}) (uint64, error) {
-	var valid bool
-	value, valid = normalizeInput(value)
-	if !valid {
-		return 0, nil
-	}
-	if converted, handled, err := checkedUnsignedNumber(value, 64, "uint64"); handled {
-		return converted, err
-	}
-
-	switch v := value.(type) {
-	case uint:
-		return uint64(v), nil
-	case uint64:
-		return v, nil
-	case uint32:
-		return uint64(v), nil
-	case uint16:
-		return uint64(v), nil
-	case uint8:
-		return uint64(v), nil
-	case int:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint64", internal.ErrOverflow)
-		}
-		return uint64(v), nil
-	case int64:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint64", internal.ErrOverflow)
-		}
-		return uint64(v), nil
-	case int32:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint64", internal.ErrOverflow)
-		}
-		return uint64(v), nil
-	case int16:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint64", internal.ErrOverflow)
-		}
-		return uint64(v), nil
-	case int8:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint64", internal.ErrOverflow)
-		}
-		return uint64(v), nil
-	case float64:
-		if v < 0 || v > float64(math.MaxUint64) {
-			return 0, internal.NewConversionError(value, "uint64", internal.ErrOverflow)
-		}
-		return uint64(v), nil
-	case float32:
-		f := float64(v)
-		if f < 0 || f > float64(math.MaxUint64) {
-			return 0, internal.NewConversionError(value, "uint64", internal.ErrOverflow)
-		}
-		return uint64(f), nil
-	case complex64:
-		if imag(v) != 0 {
-			return 0, internal.NewConversionError(value, "uint64", internal.ErrConversionFailed)
-		}
-		f := float64(real(v))
-		if f < 0 || f > float64(math.MaxUint64) {
-			return 0, internal.NewConversionError(value, "uint64", internal.ErrOverflow)
-		}
-		return uint64(f), nil
-	case complex128:
-		if imag(v) != 0 {
-			return 0, internal.NewConversionError(value, "uint64", internal.ErrConversionFailed)
-		}
-		f := real(v)
-		if f < 0 || f > float64(math.MaxUint64) {
-			return 0, internal.NewConversionError(value, "uint64", internal.ErrOverflow)
-		}
-		return uint64(f), nil
-	case bool:
-		if v {
-			return 1, nil
-		}
-		return 0, nil
-	case string:
-		v = strings.TrimSpace(v)
-		u, err := strconv.ParseUint(v, 0, 64)
-		if err != nil {
-			return 0, internal.NewConversionError(value, "uint64", err)
-		}
-		return u, nil
-	default:
-		return 0, internal.NewConversionError(value, "uint64", internal.ErrUnsupportedType)
-	}
+	return toUnsignedInteger(value, 64, "uint64")
 }
 
-// ToUint32 converts any type to uint32
+// ToUint32 converts value to uint32 and returns zero when conversion fails.
 func ToUint32(value interface{}) uint32 {
 	result, _ := ToUint32E(value)
 	return result
 }
 
-// ToUint32E converts any type to uint32 with error
+// ToUint32E converts value to uint32.
 func ToUint32E(value interface{}) (uint32, error) {
-	var valid bool
-	value, valid = normalizeInput(value)
-	if !valid {
-		return 0, nil
-	}
-	if converted, handled, err := checkedUnsignedNumber(value, 32, "uint32"); handled {
-		return uint32(converted), err
-	}
-
-	switch v := value.(type) {
-	case uint:
-		if v > uint(^uint32(0)) {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrOverflow)
-		}
-		return uint32(v), nil
-	case uint64:
-		if v > uint64(^uint32(0)) {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrOverflow)
-		}
-		return uint32(v), nil
-	case uint32:
-		return v, nil
-	case uint16:
-		return uint32(v), nil
-	case uint8:
-		return uint32(v), nil
-	case int:
-		if v < 0 || v > int(^uint32(0)) {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrOverflow)
-		}
-		return uint32(v), nil
-	case int64:
-		if v < 0 || v > int64(^uint32(0)) {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrOverflow)
-		}
-		return uint32(v), nil
-	case int32:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrOverflow)
-		}
-		return uint32(v), nil
-	case int16:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrOverflow)
-		}
-		return uint32(v), nil
-	case int8:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrOverflow)
-		}
-		return uint32(v), nil
-	case float64:
-		if v < 0 || v > float64(math.MaxUint32) {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrOverflow)
-		}
-		return uint32(v), nil
-	case float32:
-		f := float64(v)
-		if f < 0 || f > float64(math.MaxUint32) {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrOverflow)
-		}
-		return uint32(f), nil
-	case complex64:
-		if imag(v) != 0 {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrConversionFailed)
-		}
-		f := float64(real(v))
-		if f < 0 || f > float64(math.MaxUint32) {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrOverflow)
-		}
-		return uint32(f), nil
-	case complex128:
-		if imag(v) != 0 {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrConversionFailed)
-		}
-		f := real(v)
-		if f < 0 || f > float64(math.MaxUint32) {
-			return 0, internal.NewConversionError(value, "uint32", internal.ErrOverflow)
-		}
-		return uint32(f), nil
-	case bool:
-		if v {
-			return 1, nil
-		}
-		return 0, nil
-	case string:
-		v = strings.TrimSpace(v)
-		u, err := strconv.ParseUint(v, 0, 32)
-		if err != nil {
-			return 0, internal.NewConversionError(value, "uint32", err)
-		}
-		return uint32(u), nil
-	default:
-		return 0, internal.NewConversionError(value, "uint32", internal.ErrUnsupportedType)
-	}
+	converted, err := toUnsignedInteger(value, 32, "uint32")
+	return uint32(converted), err
 }
 
-// ToUint16 converts any type to uint16
+// ToUint16 converts value to uint16 and returns zero when conversion fails.
 func ToUint16(value interface{}) uint16 {
 	result, _ := ToUint16E(value)
 	return result
 }
 
-// ToUint16E converts any type to uint16 with error
+// ToUint16E converts value to uint16.
 func ToUint16E(value interface{}) (uint16, error) {
-	var valid bool
-	value, valid = normalizeInput(value)
-	if !valid {
-		return 0, nil
-	}
-	if converted, handled, err := checkedUnsignedNumber(value, 16, "uint16"); handled {
-		return uint16(converted), err
-	}
-
-	switch v := value.(type) {
-	case uint:
-		if v > uint(^uint16(0)) {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(v), nil
-	case uint64:
-		if v > uint64(^uint16(0)) {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(v), nil
-	case uint32:
-		if v > uint32(^uint16(0)) {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(v), nil
-	case uint16:
-		return v, nil
-	case uint8:
-		return uint16(v), nil
-	case int:
-		if v < 0 || v > int(^uint16(0)) {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(v), nil
-	case int64:
-		if v < 0 || v > int64(^uint16(0)) {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(v), nil
-	case int32:
-		if v < 0 || v > int32(^uint16(0)) {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(v), nil
-	case int16:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(v), nil
-	case int8:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(v), nil
-	case float64:
-		if v < 0 || v > float64(math.MaxUint16) {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(v), nil
-	case float32:
-		f := float64(v)
-		if f < 0 || f > float64(math.MaxUint16) {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(f), nil
-	case complex64:
-		if imag(v) != 0 {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrConversionFailed)
-		}
-		f := float64(real(v))
-		if f < 0 || f > float64(math.MaxUint16) {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(f), nil
-	case complex128:
-		if imag(v) != 0 {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrConversionFailed)
-		}
-		f := real(v)
-		if f < 0 || f > float64(math.MaxUint16) {
-			return 0, internal.NewConversionError(value, "uint16", internal.ErrOverflow)
-		}
-		return uint16(f), nil
-	case bool:
-		if v {
-			return 1, nil
-		}
-		return 0, nil
-	case string:
-		v = strings.TrimSpace(v)
-		u, err := strconv.ParseUint(v, 0, 16)
-		if err != nil {
-			return 0, internal.NewConversionError(value, "uint16", err)
-		}
-		return uint16(u), nil
-	default:
-		return 0, internal.NewConversionError(value, "uint16", internal.ErrUnsupportedType)
-	}
+	converted, err := toUnsignedInteger(value, 16, "uint16")
+	return uint16(converted), err
 }
 
-// ToUint8 converts any type to uint8
+// ToUint8 converts value to uint8 and returns zero when conversion fails.
 func ToUint8(value interface{}) uint8 {
 	result, _ := ToUint8E(value)
 	return result
 }
 
-// ToUint8E converts any type to uint8 with error
+// ToUint8E converts value to uint8.
 func ToUint8E(value interface{}) (uint8, error) {
-	var valid bool
-	value, valid = normalizeInput(value)
+	converted, err := toUnsignedInteger(value, 8, "uint8")
+	return uint8(converted), err
+}
+
+// toUnsignedInteger applies the shared conversion and range rules for every
+// unsigned integer width. Negative, non-finite, and rounded upper boundaries
+// are rejected consistently before a result is returned.
+func toUnsignedInteger(value interface{}, bits int, target string) (uint64, error) {
+	normalized, valid := normalizeInput(value)
 	if !valid {
 		return 0, nil
 	}
-	if converted, handled, err := checkedUnsignedNumber(value, 8, "uint8"); handled {
-		return uint8(converted), err
+	if converted, handled, err := checkedUnsignedNumber(normalized, bits, target); handled {
+		return converted, err
 	}
 
-	switch v := value.(type) {
+	var converted uint64
+	switch typed := normalized.(type) {
 	case uint:
-		if v > uint(^uint8(0)) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(v), nil
+		converted = uint64(typed)
 	case uint64:
-		if v > uint64(^uint8(0)) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(v), nil
+		converted = typed
 	case uint32:
-		if v > uint32(^uint8(0)) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(v), nil
+		converted = uint64(typed)
 	case uint16:
-		if v > uint16(^uint8(0)) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(v), nil
+		converted = uint64(typed)
 	case uint8:
-		return v, nil
+		converted = uint64(typed)
 	case int:
-		if v < 0 || v > int(^uint8(0)) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(v), nil
+		return unsignedFromInt(int64(typed), normalized, bits, target)
 	case int64:
-		if v < 0 || v > int64(^uint8(0)) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(v), nil
+		return unsignedFromInt(typed, normalized, bits, target)
 	case int32:
-		if v < 0 || v > int32(^uint8(0)) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(v), nil
+		return unsignedFromInt(int64(typed), normalized, bits, target)
 	case int16:
-		if v < 0 || v > int16(^uint8(0)) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(v), nil
+		return unsignedFromInt(int64(typed), normalized, bits, target)
 	case int8:
-		if v < 0 {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(v), nil
-	case float64:
-		if v < 0 || v > float64(math.MaxUint8) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(v), nil
-	case float32:
-		f := float64(v)
-		if f < 0 || f > float64(math.MaxUint8) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(f), nil
-	case complex64:
-		if imag(v) != 0 {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrConversionFailed)
-		}
-		f := float64(real(v))
-		if f < 0 || f > float64(math.MaxUint8) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(f), nil
-	case complex128:
-		if imag(v) != 0 {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrConversionFailed)
-		}
-		f := real(v)
-		if f < 0 || f > float64(math.MaxUint8) {
-			return 0, internal.NewConversionError(value, "uint8", internal.ErrOverflow)
-		}
-		return uint8(f), nil
+		return unsignedFromInt(int64(typed), normalized, bits, target)
 	case bool:
-		if v {
+		if typed {
 			return 1, nil
 		}
 		return 0, nil
 	case string:
-		v = strings.TrimSpace(v)
-		u, err := strconv.ParseUint(v, 0, 8)
+		parsed, err := strconv.ParseUint(strings.TrimSpace(typed), 0, bits)
 		if err != nil {
-			return 0, internal.NewConversionError(value, "uint8", err)
+			return 0, internal.NewConversionError(normalized, target, err)
 		}
-		return uint8(u), nil
+		return parsed, nil
 	default:
-		return 0, internal.NewConversionError(value, "uint8", internal.ErrUnsupportedType)
+		return 0, internal.NewConversionError(normalized, target, internal.ErrUnsupportedType)
 	}
+
+	if converted > unsignedMaximum(bits) {
+		return 0, internal.NewConversionError(normalized, target, internal.ErrOverflow)
+	}
+	return converted, nil
+}
+
+func unsignedFromInt(value int64, original interface{}, bits int, target string) (uint64, error) {
+	if value < 0 {
+		return 0, internal.NewConversionError(original, target, internal.ErrOverflow)
+	}
+	converted := uint64(value)
+	if converted > unsignedMaximum(bits) {
+		return 0, internal.NewConversionError(original, target, internal.ErrOverflow)
+	}
+	return converted, nil
+}
+
+func unsignedMaximum(bits int) uint64 {
+	if bits == 64 {
+		return math.MaxUint64
+	}
+	return uint64(1)<<bits - 1
 }

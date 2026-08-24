@@ -16,6 +16,11 @@
 go get github.com/graingo/mconv
 ```
 
+New code should import the canonical root package `github.com/graingo/mconv`.
+The `basic` and `complex` subpackages remain compatible throughout v1 but are
+not recommended as new application entry points. See
+[V2_MIGRATION.md](V2_MIGRATION.md) for the v2 boundary.
+
 ## Quick start
 
 ```go
@@ -194,7 +199,10 @@ go vet ./...
 go test -run '^$' -bench . -benchmem
 ```
 
-CI verifies both Go 1.18 and the current stable release, and runs short fuzz smoke tests on the stable release.
+CI verifies both Go 1.18 and the current stable release. On stable Go it also
+runs short fuzz smoke tests, enforces `basic` coverage and allocation budgets,
+and compares the public API with the latest v1 tag. Scheduled benchmarks retain
+downloadable results for cross-commit `benchstat` comparisons.
 
 ## License
 
