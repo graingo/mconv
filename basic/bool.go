@@ -15,7 +15,9 @@ func ToBool(value interface{}) bool {
 
 // ToBoolE converts any type to bool with error.
 func ToBoolE(value interface{}) (bool, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return false, nil
 	}
 

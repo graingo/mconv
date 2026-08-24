@@ -146,20 +146,11 @@ func TestToIntMap(t *testing.T) {
 		t.Errorf("ToIntMap(map[string]float64{\"a\": 1.1, \"b\": 2.2, \"c\": 3.3}) = %v; want %v", result, expected)
 	}
 
-	// TODO: Fix this test
-	// Test a struct
-	// result = mconv.ToIntMap(struct{ A, B int }{1, 2})
-	// expected = map[string]int{"A": 1, "B": 2}
-	// // The result of converting a struct to a map may have a different order of keys.
-	// // So we need to check the length and the values of the keys.
-	// if len(result) != len(expected) {
-	// 	t.Errorf("ToIntMap(struct) len = %v, want %v", len(result), len(expected))
-	// }
-	// for k, v := range expected {
-	// 	if result[k] != v {
-	// 		t.Errorf("ToIntMap(struct) [%s] = %v, want %v", k, result[k], v)
-	// 	}
-	// }
+	result = mconv.ToIntMap(struct{ A, B int }{1, 2})
+	expected = map[string]int{"A": 1, "B": 2}
+	if !intMapEqual(result, expected) {
+		t.Errorf("ToIntMap(struct{ A, B int }{1, 2}) = %v; want %v", result, expected)
+	}
 }
 
 func TestToIntMapE(t *testing.T) {
@@ -239,20 +230,11 @@ func TestToFloat64Map(t *testing.T) {
 		t.Errorf("ToFloat64Map(map[string]int{\"a\": 1, \"b\": 2, \"c\": 3}) = %v; want %v", result, expected)
 	}
 
-	// TODO: Fix this test
-	// Test a struct
-	// result = mconv.ToFloat64Map(struct{ A, B float64 }{1.1, 2.2})
-	// expectedF := map[string]float64{"A": 1.1, "B": 2.2}
-	// // The result of converting a struct to a map may have a different order of keys.
-	// // So we need to check the length and the values of the keys.
-	// if len(result) != len(expectedF) {
-	// 	t.Errorf("ToFloat64Map(struct) len = %v, want %v", len(result), len(expectedF))
-	// }
-	// for k, v := range expectedF {
-	// 	if result[k] != v {
-	// 		t.Errorf("ToFloat64Map(struct) [%s] = %v, want %v", k, result[k], v)
-	// 	}
-	// }
+	result = mconv.ToFloat64Map(struct{ A, B float64 }{1.1, 2.2})
+	expected = map[string]float64{"A": 1.1, "B": 2.2}
+	if !float64MapEqual(result, expected) {
+		t.Errorf("ToFloat64Map(struct{ A, B float64 }{1.1, 2.2}) = %v; want %v", result, expected)
+	}
 }
 
 func TestToFloat64MapE(t *testing.T) {

@@ -11,6 +11,47 @@ import (
 // HookFunc is an alias of complex.HookFunc.
 type HookFunc = complex.HookFunc
 
+// ConversionError describes a failed conversion and its destination path.
+type ConversionError = internal.ConversionError
+
+var (
+	ErrUnsupportedType   = internal.ErrUnsupportedType
+	ErrConversionFailed  = internal.ErrConversionFailed
+	ErrOverflow          = internal.ErrOverflow
+	ErrInvalidTimeFormat = internal.ErrInvalidTimeFormat
+	ErrInvalidJSONFormat = internal.ErrInvalidJSONFormat
+)
+
+// To converts value to T and returns the zero value when conversion fails.
+func To[T any](value interface{}, hooks ...HookFunc) T {
+	return complex.ToT[T](value, hooks...)
+}
+
+// ToE converts value to T and returns a conversion error with path context.
+func ToE[T any](value interface{}, hooks ...HookFunc) (T, error) {
+	return complex.ToTE[T](value, hooks...)
+}
+
+// ToSliceT converts value to []T and returns nil when conversion fails.
+func ToSliceT[T any](value interface{}) []T {
+	return complex.ToSliceT[T](value)
+}
+
+// ToSliceTE converts value to []T and returns a conversion error with index context.
+func ToSliceTE[T any](value interface{}) ([]T, error) {
+	return complex.ToSliceTE[T](value)
+}
+
+// ToMapT converts value to map[K]V and returns nil when conversion fails.
+func ToMapT[K comparable, V any](value interface{}) map[K]V {
+	return complex.ToMapT[K, V](value)
+}
+
+// ToMapTE converts value to map[K]V and returns a conversion error with key context.
+func ToMapTE[K comparable, V any](value interface{}) (map[K]V, error) {
+	return complex.ToMapTE[K, V](value)
+}
+
 // ToString converts any type to string.
 func ToString(value interface{}) string { return basic.ToString(value) }
 
@@ -209,10 +250,12 @@ func ToStructE(source, pointer interface{}, hooks ...HookFunc) error {
 	return complex.ToStructE(source, pointer, hooks...)
 }
 
-// SetStringCacheSize sets the string conversion cache size.
+// SetStringCacheSize sets the optional string conversion cache size.
+// The cache is disabled by default; a non-positive size disables it.
 func SetStringCacheSize(size int) { internal.SetStringCacheSize(size) }
 
-// SetTimeCacheSize sets the time conversion cache size.
+// SetTimeCacheSize sets the optional time conversion cache size.
+// The cache is disabled by default; a non-positive size disables it.
 func SetTimeCacheSize(size int) { internal.SetTimeCacheSize(size) }
 
 // ClearStringCache clears the string conversion cache.
@@ -224,43 +267,18 @@ func ClearTimeCache() { internal.ClearTimeCache() }
 // ClearAllCaches clears all conversion caches.
 func ClearAllCaches() { internal.ClearAllCaches() }
 
-// SetTypeInfoCacheSize sets the reflection type-info cache size.
-func SetTypeInfoCacheSize(size int) { internal.SetTypeInfoCacheSize(size) }
+// SetTypeInfoCacheSize is retained for source compatibility.
+// Deprecated: mconv uses an automatic decoder cache and has no separate type-info cache.
+func SetTypeInfoCacheSize(size int) {}
 
-// SetConversionCacheSize sets the reflection conversion cache size.
-func SetConversionCacheSize(size int) { internal.SetConversionCacheSize(size) }
+// SetConversionCacheSize is retained for source compatibility.
+// Deprecated: direct type checks are faster than a separate conversion cache.
+func SetConversionCacheSize(size int) {}
 
-// ClearTypeInfoCache clears the reflection type-info cache.
-func ClearTypeInfoCache() { internal.ClearTypeInfoCache() }
+// ClearTypeInfoCache is retained for source compatibility.
+// Deprecated: mconv uses an automatic decoder cache and has no separate type-info cache.
+func ClearTypeInfoCache() {}
 
-// ClearConversionCache clears the reflection conversion cache.
-func ClearConversionCache() { internal.ClearConversionCache() }
-
-// Note: This library also provides generic conversion functions, which need to
-// be imported directly from the complex package.
-//
-// Generic slice conversion functions:
-// - complex.ToSliceT[T any](value interface{}) []T
-//   Convert any type to []T type slice
-//   Example:
-//     strSlice := complex.ToSliceT[string](value) // Convert to []string
-//     intSlice := complex.ToSliceT[int](value)    // Convert to []int
-//
-// - complex.ToSliceTE[T any](value interface{}) ([]T, error)
-//   Convert any type to []T type slice, and return the possible error
-//   Example:
-//     strSlice, err := complex.ToSliceTE[string](value) // Convert to []string
-//     intSlice, err := complex.ToSliceTE[int](value)    // Convert to []int
-//
-// Generic map conversion functions:
-// - complex.ToMapT[K comparable, V any](value interface{}) map[K]V
-//   Convert any type to map[K]V type map
-//   Example:
-//     strMap := complex.ToMapT[string, string](value) // Convert to map[string]string
-//     intMap := complex.ToMapT[string, int](value)    // Convert to map[string]int
-//
-// - complex.ToMapTE[K comparable, V any](value interface{}) (map[K]V, error)
-//   Convert any type to map[K]V type map, and return the possible error
-//   Example:
-//     strMap, err := complex.ToMapTE[string, string](value) // Convert to map[string]string
-//     intMap, err := complex.ToMapTE[string, int](value)    // Convert to map[string]int
+// ClearConversionCache is retained for source compatibility.
+// Deprecated: direct type checks are faster than a separate conversion cache.
+func ClearConversionCache() {}

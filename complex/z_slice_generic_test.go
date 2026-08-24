@@ -1,9 +1,11 @@
 package complex_test
 
 import (
+	"errors"
 	"reflect"
 	"testing"
 
+	"github.com/graingo/mconv"
 	"github.com/graingo/mconv/complex"
 )
 
@@ -60,6 +62,36 @@ func TestToSliceTE(t *testing.T) {
 		_, err := complex.ToSliceTE[int](source)
 		if err == nil {
 			t.Error("expected an error but got nil")
+		}
+	})
+
+	t.Run("pointer to array", func(t *testing.T) {
+		source := [3]int{1, 2, 3}
+		pointer := &source
+		result, err := complex.ToSliceTE[string](&pointer)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !reflect.DeepEqual(result, []string{"1", "2", "3"}) {
+			t.Fatalf("unexpected result: %#v", result)
+		}
+	})
+
+	t.Run("scalar", func(t *testing.T) {
+		result, err := complex.ToSliceTE[int]("42")
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !reflect.DeepEqual(result, []int{42}) {
+			t.Fatalf("unexpected result: %#v", result)
+		}
+	})
+
+	t.Run("error includes index", func(t *testing.T) {
+		_, err := complex.ToSliceTE[int]([]string{"1", "invalid"})
+		var conversionErr *mconv.ConversionError
+		if !errors.As(err, &conversionErr) || conversionErr.Path != "[1]" {
+			t.Fatalf("expected path [1], got %v", err)
 		}
 	})
 }

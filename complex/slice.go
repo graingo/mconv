@@ -15,7 +15,7 @@ func ToSlice(value interface{}) []interface{} {
 
 // ToSliceE converts any type to []interface{} with error.
 func ToSliceE(value interface{}) ([]interface{}, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
@@ -64,8 +64,17 @@ func ToSliceE(value interface{}) ([]interface{}, error) {
 		return []interface{}{v}, nil
 	default:
 		rv := reflect.ValueOf(value)
+		for rv.Kind() == reflect.Ptr || rv.Kind() == reflect.Interface {
+			if rv.IsNil() {
+				return nil, nil
+			}
+			rv = rv.Elem()
+		}
+		if rv.Kind() == reflect.Slice && rv.IsNil() {
+			return nil, nil
+		}
 		if rv.Kind() != reflect.Slice && rv.Kind() != reflect.Array {
-			return []interface{}{value}, nil
+			return []interface{}{rv.Interface()}, nil
 		}
 
 		sliceLen := rv.Len()
@@ -85,7 +94,7 @@ func ToStringSlice(value interface{}) []string {
 
 // ToStringSliceE converts any type to []string with error
 func ToStringSliceE(value interface{}) ([]string, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
@@ -103,27 +112,13 @@ func ToStringSliceE(value interface{}) ([]string, error) {
 		}
 		return result, nil
 	case string:
-		str := v
-		return []string{str}, nil
+		return []string{v}, nil
 	default:
-		rv := reflect.ValueOf(value)
-		if rv.Kind() != reflect.Slice {
-			str, err := basic.ToStringE(value)
-			if err != nil {
-				return nil, internal.NewConversionError(value, "slice", err)
-			}
-			return []string{str}, nil
+		items, err := ToSliceE(value)
+		if err != nil {
+			return nil, internal.NewConversionError(value, "[]string", err)
 		}
-
-		result := make([]string, rv.Len())
-		for i := 0; i < rv.Len(); i++ {
-			str, err := basic.ToStringE(rv.Index(i).Interface())
-			if err != nil {
-				return nil, internal.NewConversionError(value, "slice", err)
-			}
-			result[i] = str
-		}
-		return result, nil
+		return ToStringSliceE(items)
 	}
 }
 
@@ -135,7 +130,7 @@ func ToIntSlice(value interface{}) []int {
 
 // ToIntSliceE converts any type to []int with error.
 func ToIntSliceE(value interface{}) ([]int, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
@@ -180,7 +175,7 @@ func ToFloat64Slice(value interface{}) []float64 {
 
 // ToFloat64SliceE converts any type to []float64 with error.
 func ToFloat64SliceE(value interface{}) ([]float64, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 

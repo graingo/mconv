@@ -1,14 +1,14 @@
 package complex
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/graingo/mconv/internal"
 )
 
 // ToMapT converts any type to map[K]V.
-// This is a generic version of ToMap that returns a map with key type K and value type V.
-// It uses reflection caching to improve performance for repeated conversions.
+// Source keys are converted directly to K without a string intermediate.
 //
 // Examples:
 //
@@ -26,8 +26,7 @@ func ToMapT[K comparable, V any](value interface{}) map[K]V {
 }
 
 // ToMapTE converts any type to map[K]V with error.
-// This is a generic version of ToMapE that returns a map with key type K and value type V.
-// It uses reflection caching to improve performance for repeated conversions.
+// It rejects key collisions and includes the failing key in ConversionError.Path.
 //
 // Examples:
 //
@@ -40,7 +39,7 @@ func ToMapT[K comparable, V any](value interface{}) map[K]V {
 //	// Convert to map[int]float64 with error handling
 //	floatMap, err := ToMapTE[int, float64](value)
 func ToMapTE[K comparable, V any](value interface{}) (map[K]V, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
@@ -48,32 +47,51 @@ func ToMapTE[K comparable, V any](value interface{}) (map[K]V, error) {
 		return v, nil
 	}
 
-	m, err := ToMapE(value)
-	if err != nil {
-		return nil, internal.NewConversionError(value, "map[K]V", err)
+	source, valid := indirectValue(value)
+	if !valid {
+		return nil, nil
+	}
+	if source.Kind() == reflect.Struct {
+		converted, err := ToMapE(source.Interface())
+		if err != nil {
+			return nil, internal.NewConversionError(value, "map[K]V", err)
+		}
+		source = reflect.ValueOf(converted)
+	}
+	if source.Kind() != reflect.Map {
+		return nil, internal.NewConversionError(value, "map[K]V", internal.ErrUnsupportedType)
 	}
 
 	kt := reflect.TypeOf((*K)(nil)).Elem()
-	vt := reflect.TypeOf((*V)(nil)).Elem()
 
-	result := make(map[K]V)
+	result := make(map[K]V, source.Len())
+	keysRemainUnique := source.Type().Key().AssignableTo(kt)
+	convertKey := genericConverter[K]()
+	convertValue := genericConverter[V]()
+	iterator := source.MapRange()
+	for iterator.Next() {
+		sourceKey := iterator.Key().Interface()
+		key, err := convertGenericValue(sourceKey, convertKey)
+		if err != nil {
+			return nil, internal.PrependConversionPath(err, fmt.Sprintf("[%v]", sourceKey))
+		}
+		if !keysRemainUnique {
+			if _, exists := result[key]; exists {
+				collisionErr := internal.NewConversionError(sourceKey, kt.String(), internal.ErrConversionFailed)
+				return nil, internal.PrependConversionPath(collisionErr, fmt.Sprintf("[%v]", sourceKey))
+			}
+		}
 
-	for k, v := range m {
-		keyValue := reflect.New(kt).Elem()
-		if err := setGenericValue(keyValue, k); err != nil {
-			return nil, internal.NewConversionError(k, kt.String(), err)
+		sourceValue := iterator.Value()
+		var convertedValue V
+		if !isNilReflectValue(sourceValue) {
+			item := sourceValue.Interface()
+			convertedValue, err = convertGenericValue(item, convertValue)
+			if err != nil {
+				return nil, internal.PrependConversionPath(err, fmt.Sprintf("[%v]", sourceKey))
+			}
 		}
-		keyConverted := keyValue.Interface().(K)
-
-		valueTarget := reflect.New(vt).Elem()
-		if v == nil {
-			result[keyConverted] = valueTarget.Interface().(V)
-			continue
-		}
-		if err := setGenericValue(valueTarget, v); err != nil {
-			return nil, internal.NewConversionError(v, vt.String(), err)
-		}
-		result[keyConverted] = valueTarget.Interface().(V)
+		result[key] = convertedValue
 	}
 
 	return result, nil

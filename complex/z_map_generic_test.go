@@ -71,4 +71,35 @@ func TestToMapTE(t *testing.T) {
 			t.Error("expected an error but got nil")
 		}
 	})
+
+	t.Run("preserves comparable struct keys", func(t *testing.T) {
+		type key struct{ ID int }
+		source := map[key]string{{ID: 7}: "42"}
+		result, err := complex.ToMapTE[key, int](source)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !reflect.DeepEqual(result, map[key]int{{ID: 7}: 42}) {
+			t.Fatalf("unexpected result: %#v", result)
+		}
+	})
+
+	t.Run("pointer to map", func(t *testing.T) {
+		source := map[int]string{1: "2"}
+		pointer := &source
+		result, err := complex.ToMapTE[int, int](&pointer)
+		if err != nil {
+			t.Fatalf("unexpected error: %v", err)
+		}
+		if !reflect.DeepEqual(result, map[int]int{1: 2}) {
+			t.Fatalf("unexpected result: %#v", result)
+		}
+	})
+
+	t.Run("rejects converted key collisions", func(t *testing.T) {
+		source := map[interface{}]interface{}{1: "number", "1": "string"}
+		if _, err := complex.ToMapTE[string, string](source); err == nil {
+			t.Fatal("converted key collision should fail")
+		}
+	})
 }

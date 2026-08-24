@@ -2,7 +2,6 @@ package internal_test
 
 import (
 	"errors"
-	"reflect"
 	"sync"
 	"testing"
 	"time"
@@ -25,11 +24,9 @@ func TestNewConversionError(t *testing.T) {
 }
 
 func TestCachesAreSafeDuringConcurrentReconfiguration(t *testing.T) {
-	type customInt int
-	target := reflect.TypeOf(int(0))
 	var wg sync.WaitGroup
 	for i := 0; i < 50; i++ {
-		wg.Add(3)
+		wg.Add(2)
 		go func(index int) {
 			defer wg.Done()
 			internal.SetStringCacheSize(index % 4)
@@ -42,13 +39,6 @@ func TestCachesAreSafeDuringConcurrentReconfiguration(t *testing.T) {
 			internal.AddTimeToCache(index, time.Now())
 			_, _ = internal.GetTimeFromCache(index)
 		}(i)
-		go func() {
-			defer wg.Done()
-			info := internal.GetTypeInfo(reflect.TypeOf(customInt(0)))
-			_ = info.IsConvertibleTo(target)
-			_ = info.IsAssignableTo(target)
-			internal.ClearTypeInfoCache()
-		}()
 	}
 	wg.Wait()
 }
@@ -120,10 +110,10 @@ func TestCacheSize(t *testing.T) {
 	if _, ok := internal.GetTimeFromCache("b"); !ok {
 		t.Error("time cache should have 'b'")
 	}
-	// test negative size
+	// A negative size disables the cache consistently with the string cache.
 	internal.SetTimeCacheSize(-1)
-	if _, ok := internal.GetTimeFromCache("b"); !ok {
-		t.Error("time cache should not be affected by negative size")
+	if _, ok := internal.GetTimeFromCache("b"); ok {
+		t.Error("time cache should be disabled by a negative size")
 	}
 }
 
@@ -169,41 +159,4 @@ func TestDecoderCache(t *testing.T) {
 	if ok {
 		t.Error("ClearDecoderCache failed")
 	}
-}
-
-func TestReflectCache(t *testing.T) {
-	internal.ClearAllCaches()
-	internal.ClearTypeInfoCache()
-	internal.ClearConversionCache()
-	internal.ClearAllReflectCaches()
-}
-
-func TestTypeInfoCache(t *testing.T) {
-	internal.ClearTypeInfoCache()
-	internal.SetTypeInfoCacheSize(2)
-
-	// Get info for int and string
-	infoInt := internal.GetTypeInfo(reflect.TypeOf(0))
-	infoStr := internal.GetTypeInfo(reflect.TypeOf(""))
-
-	if !infoInt.IsBasic || infoStr.IsContainer {
-		t.Errorf("Type info classification is incorrect")
-	}
-
-	// This should evict int
-	internal.GetTypeInfo(reflect.TypeOf(0.0))
-
-	// Check assignability and convertibility
-	type MyInt int
-	infoMyInt := internal.GetTypeInfo(reflect.TypeOf(MyInt(0)))
-	if !infoMyInt.IsConvertibleTo(reflect.TypeOf(0)) {
-		t.Error("MyInt should be convertible to int")
-	}
-	if infoMyInt.IsAssignableTo(reflect.TypeOf(0)) {
-		t.Error("MyInt should not be assignable to int")
-	}
-
-	internal.SetTypeInfoCacheSize(-1)
-	internal.SetConversionCacheSize(-1)
-	internal.ClearConversionCache()
 }

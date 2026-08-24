@@ -10,7 +10,9 @@ import (
 
 // ToComplex128E converts any type to complex128 with error.
 func ToComplex128E(value interface{}) (complex128, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
 	}
 

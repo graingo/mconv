@@ -1,14 +1,15 @@
 package complex
 
 import (
+	"fmt"
 	"reflect"
 
 	"github.com/graingo/mconv/internal"
 )
 
 // ToSliceT converts any type to []T.
-// This is a generic version of ToSlice that returns a slice of type T.
-// It uses reflection caching to improve performance for repeated conversions.
+// Scalar targets use direct converters; defined and complex targets use the
+// shared reflection decoder.
 //
 // Examples:
 //
@@ -26,8 +27,7 @@ func ToSliceT[T any](value interface{}) []T {
 }
 
 // ToSliceTE converts any type to []T with error.
-// This is a generic version of ToSliceE that returns a slice of type T.
-// It uses reflection caching to improve performance for repeated conversions.
+// Errors include the failing element index in ConversionError.Path.
 //
 // Examples:
 //
@@ -40,43 +40,62 @@ func ToSliceT[T any](value interface{}) []T {
 //	// Convert to []float64 with error handling
 //	floatSlice, err := ToSliceTE[float64](value)
 func ToSliceTE[T any](value interface{}) ([]T, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
-	// Check if value is already a []T
 	if v, ok := value.([]T); ok {
 		return v, nil
 	}
 
-	// Get target type
-	targetType := reflect.TypeOf((*T)(nil)).Elem()
-
-	// Convert to []interface{} first
-	s, err := ToSliceE(value)
-	if err != nil {
-		return nil, internal.NewConversionError(value, "[]T", err)
+	source, valid := indirectValue(value)
+	if !valid {
+		return nil, nil
 	}
 
-	// Create result slice
-	result := make([]T, len(s))
+	var length int
+	collection := source.Kind() == reflect.Slice || source.Kind() == reflect.Array
+	if collection {
+		length = source.Len()
+	} else {
+		length = 1
+	}
 
-	// Convert each element
-	for i, v := range s {
-		if v == nil {
+	result := make([]T, length)
+	convert := genericConverter[T]()
+
+	for i := 0; i < length; i++ {
+		item := source
+		if collection {
+			item = source.Index(i)
+		}
+		if isNilReflectValue(item) {
 			continue
 		}
 
-		converted := reflect.New(targetType).Elem()
-		if err := setGenericValue(converted, v); err != nil {
-			return nil, internal.NewConversionError(v, targetType.String(), err)
+		itemValue := item.Interface()
+		converted, err := convertGenericValue(itemValue, convert)
+		if err != nil {
+			return nil, internal.PrependConversionPath(err, fmt.Sprintf("[%d]", i))
 		}
-		result[i] = converted.Interface().(T)
+		result[i] = converted
 	}
 
 	return result, nil
 }
 
+func isNilReflectValue(value reflect.Value) bool {
+	if !value.IsValid() {
+		return true
+	}
+	switch value.Kind() {
+	case reflect.Chan, reflect.Func, reflect.Interface, reflect.Map, reflect.Ptr, reflect.Slice:
+		return value.IsNil()
+	default:
+		return false
+	}
+}
+
 func setGenericValue(target reflect.Value, value interface{}) error {
-	return setFieldValue(target, value, stringToTimeHookFunc(), stringToDurationHookFunc(), intToBoolHookFunc())
+	return setFieldValue(target, value, defaultHooks...)
 }

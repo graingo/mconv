@@ -15,7 +15,9 @@ func ToInt(value interface{}) int {
 
 // ToIntE converts any type to int with error.
 func ToIntE(value interface{}) (int, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
 	}
 	if converted, handled, err := checkedSignedNumber(value, strconv.IntSize, "int"); handled {
@@ -108,7 +110,9 @@ func ToInt64(value interface{}) int64 {
 
 // ToInt64E converts any type to int64 with error.
 func ToInt64E(value interface{}) (int64, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
 	}
 	if converted, handled, err := checkedSignedNumber(value, 64, "int64"); handled {
@@ -195,7 +199,9 @@ func ToInt32(value interface{}) int32 {
 
 // ToInt32E converts any type to int32 with error
 func ToInt32E(value interface{}) (int32, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
 	}
 	if converted, handled, err := checkedSignedNumber(value, 32, "int32"); handled {
@@ -291,7 +297,9 @@ func ToInt16(value interface{}) int16 {
 
 // ToInt16E converts any type to int16 with error
 func ToInt16E(value interface{}) (int16, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
 	}
 	if converted, handled, err := checkedSignedNumber(value, 16, "int16"); handled {
@@ -393,7 +401,9 @@ func ToInt8(value interface{}) int8 {
 
 // ToInt8E converts any type to int8 with error
 func ToInt8E(value interface{}) (int8, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
 	}
 	if converted, handled, err := checkedSignedNumber(value, 8, "int8"); handled {

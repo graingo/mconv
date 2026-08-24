@@ -16,7 +16,9 @@ func ToFloat64(value interface{}) float64 {
 
 // ToFloat64E converts any type to float64 with error.
 func ToFloat64E(value interface{}) (float64, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
 	}
 
@@ -73,7 +75,9 @@ func ToFloat32(value interface{}) float32 {
 
 // ToFloat32E converts any type to float32 with error.
 func ToFloat32E(value interface{}) (float32, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
 	}
 

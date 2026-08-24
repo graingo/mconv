@@ -14,7 +14,9 @@ import (
 // ToTimeE converts any type to time.Time with error.
 // When value is a string, it will be parsed using the formats.
 func ToTimeE(value interface{}, formats ...string) (time.Time, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return time.Time{}, nil
 	}
 
@@ -115,7 +117,9 @@ func ToDuration(value interface{}) time.Duration {
 
 // ToDurationE converts any type to time.Duration with error.
 func ToDurationE(value interface{}) (time.Duration, error) {
-	if value == nil {
+	var valid bool
+	value, valid = normalizeInput(value)
+	if !valid {
 		return 0, nil
 	}
 	if converted, handled, err := checkedSignedNumber(value, 64, "time.Duration"); handled {

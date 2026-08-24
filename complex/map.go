@@ -3,7 +3,6 @@ package complex
 import (
 	"fmt"
 	"reflect"
-	"strings"
 
 	"github.com/graingo/mconv/basic"
 	"github.com/graingo/mconv/internal"
@@ -17,7 +16,7 @@ func ToMap(value interface{}) map[string]interface{} {
 
 // ToMapE converts any type to map[string]interface{} with error.
 func ToMapE(value interface{}) (map[string]interface{}, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
@@ -102,6 +101,9 @@ func ToMapE(value interface{}) (map[string]interface{}, error) {
 		if rv.Kind() != reflect.Map {
 			return nil, internal.NewConversionError(value, "map", internal.ErrUnsupportedType)
 		}
+		if rv.IsNil() {
+			return nil, nil
+		}
 
 		result := make(map[string]interface{}, rv.Len())
 		for _, key := range rv.MapKeys() {
@@ -119,57 +121,15 @@ func ToMapE(value interface{}) (map[string]interface{}, error) {
 }
 
 func structToMap(value reflect.Value) (map[string]interface{}, error) {
-	result := make(map[string]interface{})
-	valueType := value.Type()
-	for i := 0; i < value.NumField(); i++ {
-		fieldType := valueType.Field(i)
-		if !fieldType.IsExported() {
-			continue
+	decoder := getDecoder(value.Type())
+	result := make(map[string]interface{}, len(decoder.FieldArr))
+	for _, fieldDecoder := range decoder.FieldArr {
+		if fieldDecoder.Ambiguous {
+			return nil, fmt.Errorf("struct contains ambiguous map key %q", fieldDecoder.Name)
 		}
-		fieldValue := value.Field(i)
-		if fieldType.Anonymous && fieldType.Tag.Get("mconv") == "" && fieldType.Tag.Get("json") == "" && fieldType.Tag.Get("yaml") == "" {
-			for fieldValue.IsValid() && fieldValue.Kind() == reflect.Ptr {
-				if fieldValue.IsNil() {
-					fieldValue = reflect.Value{}
-					break
-				}
-				fieldValue = fieldValue.Elem()
-			}
-			if fieldValue.IsValid() && fieldValue.Kind() == reflect.Struct {
-				embedded, err := structToMap(fieldValue)
-				if err != nil {
-					return nil, err
-				}
-				for key, item := range embedded {
-					if _, exists := result[key]; exists {
-						return nil, fmt.Errorf("embedded struct contains duplicate map key %q", key)
-					}
-					result[key] = item
-				}
-				continue
-			}
-			if !fieldValue.IsValid() {
-				continue
-			}
-		}
-
-		name := fieldType.Name
-		for _, tagName := range []string{"mconv", "json", "yaml"} {
-			tag := fieldType.Tag.Get(tagName)
-			if tag == "-" {
-				name = "-"
-				break
-			}
-			if taggedName := strings.Split(tag, ",")[0]; taggedName != "" {
-				name = taggedName
-				break
-			}
-		}
-		if name != "-" {
-			if _, exists := result[name]; exists {
-				return nil, fmt.Errorf("struct contains duplicate map key %q", name)
-			}
-			result[name] = fieldValue.Interface()
+		fieldValue := fieldByIndex(value, fieldDecoder.Index)
+		if fieldValue.IsValid() {
+			result[fieldDecoder.Name] = fieldValue.Interface()
 		}
 	}
 	return result, nil
@@ -183,41 +143,30 @@ func ToStringMap(value interface{}) map[string]string {
 
 // ToStringMapE converts any type to map[string]string with error
 func ToStringMapE(value interface{}) (map[string]string, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
-	switch v := value.(type) {
-	case map[string]string:
+	if v, ok := value.(map[string]string); ok {
 		return v, nil
-	case map[string]interface{}:
-		result := make(map[string]string, len(v))
-		for k, val := range v {
-			key := k
-			str, err := basic.ToStringE(val)
-			if err != nil {
-				return nil, internal.NewConversionError(val, "map", err)
-			}
-			result[key] = str
-		}
-		return result, nil
-	case map[interface{}]interface{}:
-		result := make(map[string]string, len(v))
-		for k, val := range v {
-			key, err := basic.ToStringE(k)
-			if err != nil {
-				return nil, internal.NewConversionError(k, "map", err)
-			}
-			str, err := basic.ToStringE(val)
-			if err != nil {
-				return nil, internal.NewConversionError(val, "map", err)
-			}
-			result[key] = str
-		}
-		return result, nil
-	default:
-		return nil, internal.NewConversionError(value, "map", internal.ErrUnsupportedType)
 	}
+
+	source, err := ToMapE(value)
+	if err != nil {
+		return nil, internal.NewConversionError(value, "map[string]string", err)
+	}
+	if source == nil {
+		return nil, nil
+	}
+	result := make(map[string]string, len(source))
+	for key, item := range source {
+		converted, err := basic.ToStringE(item)
+		if err != nil {
+			return nil, internal.NewConversionError(item, "string", err)
+		}
+		result[key] = converted
+	}
+	return result, nil
 }
 
 // ToIntMap converts any type to map[string]int.
@@ -228,7 +177,7 @@ func ToIntMap(value interface{}) map[string]int {
 
 // ToIntMapE converts any type to map[string]int with error.
 func ToIntMapE(value interface{}) (map[string]int, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
@@ -273,7 +222,7 @@ func ToFloat64Map(value interface{}) map[string]float64 {
 
 // ToFloat64MapE converts any type to map[string]float64 with error.
 func ToFloat64MapE(value interface{}) (map[string]float64, error) {
-	if value == nil {
+	if isNilCollectionInput(value) {
 		return nil, nil
 	}
 
