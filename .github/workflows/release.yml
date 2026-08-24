@@ -1,0 +1,145 @@
+name: Manual Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version to release, for example v1.2.0"
+        required: true
+        type: string
+
+concurrency:
+  group: release-${{ github.repository }}
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    name: Validate with Go ${{ matrix.go-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        go-version: ["1.18.x", "stable"]
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go-version }}
+          cache: false
+
+      - name: Validate module
+        run: |
+          set -euo pipefail
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum
+          go vet ./...
+          go test -race -covermode=atomic -coverprofile=coverage.out ./...
+          coverage=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
+          awk -v coverage="$coverage" 'BEGIN {
+            minimum = 75.0
+            printf "Total coverage: %.1f%% (minimum: %.1f%%)\n", coverage, minimum
+            if (coverage < minimum) exit 1
+          }'
+
+      - name: Run fuzz smoke tests
+        if: matrix.go-version == 'stable'
+        run: |
+          go test ./basic -run '^$' -fuzz '^FuzzStringConversions$' -fuzztime 5s
+          go test ./basic -run '^$' -fuzz '^FuzzIntegerBoundaries$' -fuzztime 5s
+          go test ./complex -run '^$' -fuzz '^FuzzDecodedJSONConversions$' -fuzztime 5s
+
+      - name: Install govulncheck
+        if: matrix.go-version == 'stable'
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.6.0
+
+      - name: Scan for reachable vulnerabilities
+        if: matrix.go-version == 'stable'
+        run: govulncheck ./...
+
+  release:
+    name: Publish ${{ inputs.version }}
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    env:
+      VERSION: ${{ inputs.version }}
+      RELEASE_BRANCH: master
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Validate release context
+        id: context
+        run: |
+          set -euo pipefail
+
+          if [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "::error::Version must use the vX.Y.Z format."
+            exit 1
+          fi
+          if [[ "$GITHUB_REF_NAME" != "$RELEASE_BRANCH" ]]; then
+            echo "::error::Releases must run from ${RELEASE_BRANCH}; current ref is ${GITHUB_REF_NAME}."
+            exit 1
+          fi
+
+          git fetch origin "$RELEASE_BRANCH" --tags
+          local_sha=$(git rev-parse HEAD)
+          remote_sha=$(git rev-parse "origin/${RELEASE_BRANCH}")
+          if [[ "$local_sha" != "$remote_sha" ]]; then
+            echo "::error::The workflow is not running from the latest ${RELEASE_BRANCH} commit."
+            exit 1
+          fi
+
+          tag_exists=false
+          if git show-ref --verify --quiet "refs/tags/${VERSION}"; then
+            tag_exists=true
+            tag_sha=$(git rev-list -n 1 "$VERSION")
+            if [[ "$tag_sha" != "$local_sha" ]]; then
+              echo "::error::Tag ${VERSION} points to ${tag_sha}, expected ${local_sha}."
+              exit 1
+            fi
+          fi
+
+          release_exists=false
+          if gh release view "$VERSION" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            release_exists=true
+          fi
+
+          echo "tag_exists=${tag_exists}" >> "$GITHUB_OUTPUT"
+          echo "release_exists=${release_exists}" >> "$GITHUB_OUTPUT"
+
+      - name: Create GitHub Release
+        if: steps.context.outputs.release_exists != 'true'
+        uses: softprops/action-gh-release@v3
+        with:
+          tag_name: ${{ inputs.version }}
+          target_commitish: master
+          name: ${{ inputs.version }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+          make_latest: true
+
+      - name: Verify release
+        run: |
+          set -euo pipefail
+          gh release view "$VERSION" --repo "$GITHUB_REPOSITORY"
+          git fetch origin "refs/tags/${VERSION}:refs/tags/${VERSION}" --force
+          tag_sha=$(git rev-list -n 1 "$VERSION")
+          if [[ "$tag_sha" != "$(git rev-parse HEAD)" ]]; then
+            echo "::error::Published tag ${VERSION} does not point to the validated commit."
+            exit 1
+          fi
