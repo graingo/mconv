@@ -27,6 +27,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Set up Go
         uses: actions/setup-go@v7
@@ -43,7 +45,7 @@ jobs:
           go test -race -covermode=atomic -coverprofile=coverage.out ./...
           coverage=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
           awk -v coverage="$coverage" 'BEGIN {
-            minimum = 75.0
+            minimum = 85.0
             printf "Total coverage: %.1f%% (minimum: %.1f%%)\n", coverage, minimum
             if (coverage < minimum) exit 1
           }'
@@ -62,6 +64,18 @@ jobs:
       - name: Scan for reachable vulnerabilities
         if: matrix.go-version == 'stable'
         run: govulncheck ./...
+
+      - name: Check public API compatibility
+        if: matrix.go-version == 'stable'
+        run: |
+          set -euo pipefail
+          base_tag=$(git tag --sort=-v:refname --list 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
+          if [[ -z "$base_tag" ]]; then
+            echo "No release tag found; skipping API compatibility check."
+            exit 0
+          fi
+          echo "Comparing public API with ${base_tag}"
+          go run golang.org/x/exp/cmd/gorelease@v0.0.0-20250305212735-054e65f0b394 -base="$base_tag"
 
   release:
     name: Publish ${{ inputs.version }}

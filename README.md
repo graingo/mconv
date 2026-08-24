@@ -16,6 +16,10 @@
 go get github.com/graingo/mconv
 ```
 
+新代码统一导入根包 `github.com/graingo/mconv`。`basic` 和 `complex` 子包在
+v1 中继续保持兼容，但不作为新的应用代码入口。v2 边界见
+[V2_MIGRATION.md](V2_MIGRATION.md)。
+
 ## 快速开始
 
 ```go
@@ -194,7 +198,9 @@ go vet ./...
 go test -run '^$' -bench . -benchmem
 ```
 
-CI 同时验证 Go 1.18 和当前稳定版，并在稳定版运行 fuzz 冒烟测试。
+CI 同时验证 Go 1.18 和当前稳定版，在稳定版运行 fuzz 冒烟测试，并检查
+`basic` 覆盖率、分配预算和相对最新 v1 标签的公共 API 兼容性。定时
+Benchmark 会保存可下载的性能结果，用于跨提交执行 `benchstat` 对比。
 
 ## 许可证
 

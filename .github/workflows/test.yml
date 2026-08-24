@@ -39,6 +39,18 @@ jobs:
       - name: Test with race detector
         run: go test -race -covermode=atomic -coverprofile=coverage.out ./...
 
+      - name: Enforce basic package coverage
+        if: matrix.go-version == 'stable'
+        run: |
+          set -euo pipefail
+          go test -covermode=atomic -coverprofile=basic-coverage.out ./basic
+          coverage=$(go tool cover -func=basic-coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
+          awk -v coverage="$coverage" 'BEGIN {
+            minimum = 85.0
+            printf "Basic package coverage: %.1f%% (minimum: %.1f%%)\n", coverage, minimum
+            if (coverage < minimum) exit 1
+          }'
+
       - name: Run fuzz smoke tests
         if: matrix.go-version == 'stable'
         run: |
@@ -54,7 +66,7 @@ jobs:
           set -euo pipefail
           coverage=$(go tool cover -func=coverage.out | awk '/^total:/ {gsub(/%/, "", $3); print $3}')
           awk -v coverage="$coverage" 'BEGIN {
-            minimum = 75.0
+            minimum = 85.0
             printf "Total coverage: %.1f%% (minimum: %.1f%%)\n", coverage, minimum
             if (coverage < minimum) exit 1
           }'
@@ -64,3 +76,32 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
+
+  api-compatibility:
+    if: github.event_name == 'pull_request'
+    name: API compatibility
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code and tags
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Set up stable Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Compare with the latest release
+        run: |
+          set -euo pipefail
+          base_tag=$(git tag --sort=-v:refname --list 'v[0-9]*' | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | head -n 1 || true)
+          if [[ -z "$base_tag" ]]; then
+            echo "No release tag found; skipping API compatibility check."
+            exit 0
+          fi
+          echo "Comparing public API with ${base_tag}"
+          go run golang.org/x/exp/cmd/gorelease@v0.0.0-20250305212735-054e65f0b394 -base="$base_tag"

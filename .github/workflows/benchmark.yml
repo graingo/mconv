@@ -1,0 +1,52 @@
+name: Benchmark Baseline
+
+on:
+  schedule:
+    - cron: "17 3 * * 1"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: benchmark-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  benchmark:
+    name: Record benchmark baseline
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up stable Go
+        uses: actions/setup-go@v7
+        with:
+          go-version: stable
+          cache: false
+
+      - name: Verify allocation budgets
+        run: go test -run '^TestAllocationBudgets$' ./...
+
+      - name: Record latency and allocation benchmarks
+        run: |
+          set -euo pipefail
+          go test -run '^$' \
+            -bench '^Benchmark(ToString|ToInt|ToSliceT|ToMapT|LargeSliceConversion|StructConversion)$' \
+            -benchmem -count 10 | tee benchmark.txt
+          {
+            echo '## mconv benchmark baseline'
+            echo '```text'
+            cat benchmark.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload benchmark result
+        uses: actions/upload-artifact@v4
+        with:
+          name: benchmark-${{ github.sha }}
+          path: benchmark.txt
+          retention-days: 90
